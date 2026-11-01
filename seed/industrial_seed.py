@@ -132,6 +132,14 @@ BINDINGS = [
         "business_role": "SERVICE_ADMIN",
         "staff_code": "STAFF-SYN-002",
     },
+    # 平台管理员账号（seed/flowai_seed.py 里的 username="admin"）必须映射到
+    # SERVICE_ADMIN，否则干净环境里管理员的 Agent 读设备会被工业侧 403 拒绝。
+    {
+        "identity_provider": "flowai",
+        "external_user_id": "admin",
+        "business_role": "SERVICE_ADMIN",
+        "staff_code": "STAFF-SYN-002",
+    },
 ]
 
 FAULTS = [

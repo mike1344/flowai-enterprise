@@ -45,14 +45,26 @@
 
 | 项 | 结果 |
 |---|---|
-| flowai-api | 121 passed |
+| flowai-api | 132 passed |
 | industrial-api | 87 passed |
 | P0 验收脚本 | 19/19 |
 | Agent 任务集 | 20/20 |
-| 浏览器 E2E | 9/9 |
-| 契约一致性 | 双服务测试守护 |
+| 浏览器 E2E | 16/16（干净环境 8/8） |
+| 契约一致性 | 双服务测试守护 + CI 校验 |
 
-### 后续增强（同日完成）\n\n- **真实模型接入**：DeepSeek `deepseek-chat`（OpenAI 兼容）；`app/services/llm.py` + Agent 编排接入；\n  Token 用量落库并在 `/monitoring/metrics` 聚合；无依据不调用模型；失败自动回退并标记 `result.llm.status=fallback`。\n  证据：`docs/audit/25-真实模型接入-DeepSeek-验收证据.md`。\n- 登录失败限流（429）、FlowAI OpenAPI 契约、前端按需引入、干净环境复现。\n\n### 已知限制
+### 后续增强（同日完成）
+
+- **真实模型接入**：DeepSeek `deepseek-chat`（OpenAI 兼容）；`app/services/llm.py` + Agent 编排接入；
+  Token 用量落库并在 `/monitoring/metrics` 聚合；无依据不调用模型；失败自动回退并标记 `result.llm.status=fallback`。
+  证据：`docs/audit/25-真实模型接入-DeepSeek-验收证据.md`。
+- 登录失败限流（429）、FlowAI OpenAPI 契约、前端按需引入、干净环境复现。
+
+### 发布收尾（结项，2026-11-01 晚）
+
+- **标签对齐**：`v1.2.0` 重新打到 `main` HEAD（此前停在 `e3cd8f6`，落后 8 个提交）。
+- **远端与 CI**：代码推送至私有仓库 `mike1344/flowai-enterprise`（33+ 提交，含标签）；GitHub Actions `ci` 首次失败于「OpenAPI 契约未同步」，补齐 `packages/contracts/flowai-api.openapi.json`（新增 `GET /api/v1/auth/users`）后 4/4 job 通过。
+- **干净环境复现**：空数据卷 `down -v` → `up -d --build` → 容器内种子 → P0 **19/19**、Agent **20/20**（证据 `docs/audit/27-干净环境部署复现-验收证据.md`）。
+- **修复两处真实缺陷**：①`seed/industrial_seed.py` 缺 `admin` 身份映射导致干净环境 Agent 读设备 403；②部署手册 §3 的种子步骤指向未发布的 3306 端口，改为容器内执行。\n\n### 已知限制
 
 见 `docs/delivery/04-最终交付报告.md` §4（性能未覆盖写路径/模型路径、离线哈希嵌入、无 binlog 增量备份、单机架构等）。
 
