@@ -46,12 +46,12 @@
       ],
       "acceptance": "独立迁移、独立权限、容器健康检查",
       "priority": "P0",
-      "status": "DOING",
+      "status": "DONE",
       "owner": "DSH 实施代理",
       "started_at": "2026-11-01",
-      "finished_at": "",
-      "evidence": "",
-      "notes": "M00-03 开工：双库模型与独立 Alembic、Compose、CI、健康检查；先探测 Docker 守护进程",
+      "finished_at": "2026-11-01",
+      "evidence": "docs/audit/05-M00-03-验收证据.md（MySQL 8.4 真实迁移重放、双库账号隔离 ISOLATION OK、6 容器 healthy、nginx 同源代理实测）",
+      "notes": "代理验收；容器内 alembic current=head；就绪检查 database/redis/chroma 均 ok",
       "weight": 2.667
     },
     {
@@ -62,12 +62,12 @@
       ],
       "acceptance": "外键/唯一/状态/日期约束测试",
       "priority": "P0",
-      "status": "TODO",
-      "owner": "",
-      "started_at": "",
+      "status": "DOING",
+      "owner": "DSH 实施代理",
+      "started_at": "2026-11-01",
       "finished_at": "",
       "evidence": "",
-      "notes": "",
+      "notes": "M01-01 开工：Industrial 客户/型号/设备/故障实体、约束、受控管理 API 与约束测试",
       "weight": 3.556
     },
     {

@@ -18,6 +18,9 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
+pytest-of-*/
+*.db
+*.db-journal
 
 # ---- Node / 前端 ----
 node_modules/
@@ -29,7 +32,6 @@ dist/
 data/
 logs/
 *.sqlite3
-*.db-journal
 playwright-report/
 test-results/
 chroma_data/
@@ -40,5 +42,6 @@ chroma_data/
 Thumbs.db
 .DS_Store
 
-# ---- 本地备份 ----
+# ---- 本地临时与备份 ----
+.tmp/
 *.bak

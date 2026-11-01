@@ -1,0 +1,151 @@
+# 单机私有化编排：仅 frontend 暴露端口，其余服务只在内部网络（docs/01 §2、docs/08 §1）
+name: flowai
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      FLOWAI_DB_NAME: ${FLOWAI_DB_NAME:-flowai_db}
+      FLOWAI_DB_USER: ${FLOWAI_DB_USER:-flowai_app}
+      FLOWAI_DB_PASSWORD: ${FLOWAI_DB_PASSWORD}
+      INDUSTRIAL_DB_NAME: ${INDUSTRIAL_DB_NAME:-industrial_db}
+      INDUSTRIAL_DB_USER: ${INDUSTRIAL_DB_USER:-industrial_app}
+      INDUSTRIAL_DB_PASSWORD: ${INDUSTRIAL_DB_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks: [internal]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [internal]
+
+  chromadb:
+    image: chromadb/chroma:0.6.3
+    restart: unless-stopped
+    environment:
+      IS_PERSISTENT: "TRUE"
+      PERSIST_DIRECTORY: /data
+      ANONYMIZED_TELEMETRY: "FALSE"
+    volumes:
+      - chroma_data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/heartbeat', timeout=3).status == 200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks: [internal]
+
+  flowai-api:
+    build:
+      context: ../../services/flowai-api
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      FLOWAI_ENVIRONMENT: production
+      FLOWAI_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      FLOWAI_DATABASE_URL: mysql+pymysql://${FLOWAI_DB_USER:-flowai_app}:${FLOWAI_DB_PASSWORD}@mysql:3306/${FLOWAI_DB_NAME:-flowai_db}?charset=utf8mb4
+      FLOWAI_REDIS_URL: redis://redis:6379/0
+      FLOWAI_CHROMA_URL: http://chromadb:8000
+      FLOWAI_SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET}
+      FLOWAI_SERVICE_JWT_KID: ${SERVICE_JWT_KID:-k1}
+      FLOWAI_SESSION_SECRET: ${SESSION_SECRET}
+      FLOWAI_CSRF_SECRET: ${CSRF_SECRET}
+      FLOWAI_PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://127.0.0.1:8080}
+      FLOWAI_CORS_ORIGINS: ${PUBLIC_BASE_URL:-http://127.0.0.1:8080}
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3).status == 200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [internal]
+
+  industrial-api:
+    build:
+      context: ../../services/industrial-api
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      INDUSTRIAL_ENVIRONMENT: production
+      INDUSTRIAL_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      INDUSTRIAL_DATABASE_URL: mysql+pymysql://${INDUSTRIAL_DB_USER:-industrial_app}:${INDUSTRIAL_DB_PASSWORD}@mysql:3306/${INDUSTRIAL_DB_NAME:-industrial_db}?charset=utf8mb4
+      INDUSTRIAL_REDIS_URL: redis://redis:6379/1
+      INDUSTRIAL_SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET}
+      INDUSTRIAL_SERVICE_JWT_KID: ${SERVICE_JWT_KID:-k1}
+      INDUSTRIAL_SERVICE_JWT_ISSUER: flowai-api
+      INDUSTRIAL_SERVICE_JWT_AUDIENCE: industrial-api
+      INDUSTRIAL_ENABLE_ADMIN_WRITE_API: ${ENABLE_ADMIN_WRITE_API:-false}
+      INDUSTRIAL_CORS_ORIGINS: ${PUBLIC_BASE_URL:-http://127.0.0.1:8080}
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=3).status == 200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [internal]
+
+  frontend:
+    build:
+      context: ../../frontend
+    restart: unless-stopped
+    depends_on:
+      flowai-api:
+        condition: service_started
+      industrial-api:
+        condition: service_started
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1/ > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks: [internal]
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  redis_data:
+  chroma_data:
