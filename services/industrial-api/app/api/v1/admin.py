@@ -14,8 +14,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.core.errors import ok
 from app.core.security import require_service_admin
-from app.models import Customer, Device, FaultRecord, ProductModel
+from app.models import Customer, Device, FaultRecord, ProductModel, ServiceIdentityBinding, ServiceUser
 from app.schemas import (
+    BindingCreate,
+    BindingStatusUpdate,
     CustomerCreate,
     CustomerStatusUpdate,
     DeviceCreate,
@@ -23,6 +25,7 @@ from app.schemas import (
     FaultCreate,
     ProductModelCreate,
     ProductModelStatusUpdate,
+    ServiceUserCreate,
 )
 
 router = APIRouter(dependencies=[Depends(require_service_admin)])
@@ -161,6 +164,66 @@ async def create_fault(payload: FaultCreate, session: Session = Depends(get_db))
         },
         "故障记录创建成功",
     )
+
+
+@router.post("/service-users", tags=["admin"])
+async def create_service_user(
+    payload: ServiceUserCreate, session: Session = Depends(get_db)
+) -> JSONResponse:
+    service_user = ServiceUser(**payload.model_dump(), status="ACTIVE")
+    session.add(service_user)
+    _commit(session)
+    session.refresh(service_user)
+    return _created(
+        {"id": service_user.id, "staff_code": service_user.staff_code, "status": service_user.status},
+        "服务人员创建成功",
+    )
+
+
+@router.post("/identity-bindings", tags=["admin"])
+async def create_binding(
+    payload: BindingCreate, session: Session = Depends(get_db)
+) -> JSONResponse:
+    if payload.business_role == "CUSTOMER_USER":
+        customer = session.get(Customer, payload.customer_id)
+        if customer is None:
+            raise HTTPException(status_code=404, detail="客户不存在")
+        if customer.status != "ACTIVE":
+            raise HTTPException(status_code=422, detail="CUSTOMER_INACTIVE")
+    else:
+        service_user = session.get(ServiceUser, payload.service_user_id)
+        if service_user is None:
+            raise HTTPException(status_code=404, detail="服务人员不存在")
+        if service_user.status != "ACTIVE":
+            raise HTTPException(status_code=422, detail="ASSIGNEE_INACTIVE")
+
+    binding = ServiceIdentityBinding(**payload.model_dump(), status="ACTIVE")
+    session.add(binding)
+    _commit(session)
+    session.refresh(binding)
+    return _created(
+        {
+            "id": binding.id,
+            "external_user_id": binding.external_user_id,
+            "business_role": binding.business_role,
+            "customer_id": binding.customer_id,
+            "service_user_id": binding.service_user_id,
+            "status": binding.status,
+        },
+        "身份映射创建成功",
+    )
+
+
+@router.patch("/identity-bindings/{binding_id}/status", tags=["admin"])
+async def update_binding_status(
+    binding_id: int, payload: BindingStatusUpdate, session: Session = Depends(get_db)
+) -> dict:
+    binding = session.get(ServiceIdentityBinding, binding_id)
+    if binding is None:
+        raise HTTPException(status_code=404, detail="身份映射不存在")
+    binding.status = payload.status
+    _commit(session)
+    return ok({"id": binding.id, "status": binding.status}, "身份映射状态已更新")
 
 
 @router.get("/customers", tags=["admin"])
