@@ -19,6 +19,14 @@
             引用：《{{ c.document_title }}》· {{ c.page_label }}
           </li>
         </ul>
+        <div v-if="message.execution_id" class="meta-line">
+          <span v-if="executions[message.execution_id]?.llm" class="model-badge">
+            模型 {{ executions[message.execution_id].llm.model }}
+            · {{ executions[message.execution_id].llm.total_tokens }} tokens
+            <template v-if="executions[message.execution_id].llm.status === 'fallback'">（已降级）</template>
+          </span>
+          <el-button size="small" text type="primary" @click="openSteps(message.execution_id)">执行步骤</el-button>
+        </div>
       </div>
     </div>
 
@@ -51,6 +59,28 @@
       <el-input v-model="input" placeholder="例如：device_id: 7 HC200 通信异常，请帮我创建工单" @keyup.enter="send" />
       <el-button type="primary" :loading="busy" @click="send">发送</el-button>
     </div>
+
+    <el-dialog v-model="stepsDialog" title="执行步骤（结构化，不含内部推理）" width="640px">
+      <el-descriptions :column="2" size="small" border class="steps-summary">
+        <el-descriptions-item label="执行状态">{{ stepsData.status }}</el-descriptions-item>
+        <el-descriptions-item label="模型">
+          {{ stepsData.llm?.model || '未调用模型' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="Tokens">
+          {{ stepsData.llm?.total_tokens ?? 0 }}
+          （prompt {{ stepsData.llm?.prompt_tokens ?? 0 }} / completion {{ stepsData.llm?.completion_tokens ?? 0 }}）
+        </el-descriptions-item>
+        <el-descriptions-item label="模型延迟">{{ stepsData.llm?.latency_ms ?? '-' }} ms</el-descriptions-item>
+      </el-descriptions>
+      <el-table :data="stepsData.steps || []" size="small" border>
+        <el-table-column prop="step" label="#" width="50" />
+        <el-table-column prop="tool_code" label="工具" width="200" />
+        <el-table-column prop="status" label="状态" width="100" />
+        <el-table-column prop="latency_ms" label="耗时(ms)" width="100" />
+        <el-table-column prop="trace_id" label="Trace" />
+      </el-table>
+      <p v-if="stepsData.error_code" class="muted">错误码：{{ stepsData.error_code }}</p>
+    </el-dialog>
   </div>
 </template>
 
@@ -69,6 +99,9 @@ const error = ref('')
 const draft = ref(null)
 const duplicates = ref([])
 const pendingExecution = ref(null)
+const executions = ref({})
+const stepsDialog = ref(false)
+const stepsData = ref({})
 const confirmToken = ref('')
 const duplicateToken = ref('')
 const listEl = ref(null)
@@ -88,10 +121,27 @@ async function ensureSession() {
   return true
 }
 
+async function loadExecutions(items) {
+  const ids = [...new Set(items.filter((m) => Number.isInteger(m.execution_id) && m.execution_id > 0).map((m) => m.execution_id))]
+  for (const id of ids) {
+    if (executions.value[id]) continue
+    const detail = await apiGet('flowai', `/executions/${id}`)
+    if (detail.ok) executions.value[id] = detail.data
+  }
+}
+
+async function openSteps(executionId) {
+  const steps = await apiGet('flowai', `/executions/${executionId}/steps`)
+  const detail = await apiGet('flowai', `/executions/${executionId}`)
+  stepsData.value = { ...(steps.data || {}), llm: (detail.data?.result || {}).llm || null }
+  stepsDialog.value = true
+}
+
 async function refreshMessages() {
   if (!sessionId.value) return
   const result = await apiGet('flowai', `/sessions/${sessionId.value}/messages`)
   messages.value = result.data.items || []
+  await loadExecutions(messages.value)
   await nextTick()
   if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight
 }

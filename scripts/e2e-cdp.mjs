@@ -66,6 +66,10 @@ try {
   await page.getByRole('button', { name: '发送' }).click()
   await page.getByText('工单草稿（需人工确认后才会写入）').waitFor({ timeout: 25000 })
   record('未确认前出现工单草稿卡片', true)
+  await page.getByRole('button', { name: '执行步骤' }).first().click()
+  await page.getByText('执行步骤（结构化，不含内部推理）').waitFor({ timeout: 15000 })
+  record('执行步骤面板可打开（工具/模型/Token）', true)
+  await page.keyboard.press('Escape')
   record('确认前无成功工单提示', (await page.getByText(/工单已创建：WO-/).count()) === 0)
 
   await page.getByRole('button', { name: '确认创建' }).click()
