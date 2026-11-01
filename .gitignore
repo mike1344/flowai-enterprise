@@ -45,3 +45,8 @@ Thumbs.db
 # ---- 本地临时与备份 ----
 .tmp/
 *.bak
+
+# ---- 备份产物与 pip 临时目录 ----
+infra/backup/out/
+pip-unpack-*/
+pip-metadata-*/
