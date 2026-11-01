@@ -29,7 +29,7 @@ const modules = [
   { module: '会话与工单', task: 'M04-03 / M05-02', stage: 'S3/S4', status: '已实现', entry: '/apps/service-agent', note: '人工确认、重复风险二次确认、幂等创建' },
   { module: '监控与 Trace', task: 'M06-01', stage: 'S4', status: '已实现', entry: '/admin/monitoring', note: '按 Trace 查询、审计日志、指标与 Token 统计' },
   { module: '运行统计', task: 'M07-04', stage: 'S5', status: '已实现', entry: '/admin/stats', note: '请求量/错误率/P95/Token（口径见页面说明）' },
-  { module: '模型与 Embedding', task: 'M02-02', stage: 'S2', status: '已实现', entry: '/admin/applications', note: '对话接入真实模型（DeepSeek）；向量仍为离线哈希' }
+  { module: '模型与 Embedding', task: 'M02-02', stage: 'S2', status: '已实现', entry: '/admin/models', note: '模型配置/连通性测试；对话接入真实模型（DeepSeek）；向量仍为离线哈希' }
 ]
 </script>
 

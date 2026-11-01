@@ -9,6 +9,7 @@
         <el-menu-item index="/admin">运行总览</el-menu-item>
         <el-menu-item index="/admin/applications">AI 应用</el-menu-item>
         <el-menu-item index="/admin/knowledge">知识库</el-menu-item>
+        <el-menu-item index="/admin/models">模型配置</el-menu-item>
         <el-menu-item index="/admin/tools">工具中心</el-menu-item>
         <el-menu-item index="/admin/users">用户与角色</el-menu-item>
         <el-menu-item index="/admin/monitoring">监控与审计</el-menu-item>

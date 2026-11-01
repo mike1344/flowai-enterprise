@@ -42,6 +42,7 @@ try {
 
   // 后台页面巡检：工具中心 / 用户与角色 / 监控与审计 / 平台模块
   const adminPages = [
+    { menu: '模型配置', heading: '模型配置' },
     { menu: '工具中心', heading: '工具中心' },
     { menu: '用户与角色', heading: '用户与角色' },
     { menu: '监控与审计', heading: '监控与审计' },

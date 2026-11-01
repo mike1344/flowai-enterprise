@@ -6,6 +6,7 @@ import DashboardView from '../views/admin/DashboardView.vue'
 import ApplicationsView from '../views/admin/ApplicationsView.vue'
 import KnowledgeView from '../views/admin/KnowledgeView.vue'
 import LoginView from '../views/admin/LoginView.vue'
+import ModelsView from '../views/admin/ModelsView.vue'
 import MonitoringView from '../views/admin/MonitoringView.vue'
 import StatsView from '../views/admin/StatsView.vue'
 import ToolsView from '../views/admin/ToolsView.vue'
@@ -25,6 +26,7 @@ const routes = [
       { path: 'applications', name: 'admin-applications', component: ApplicationsView },
       { path: 'knowledge', name: 'admin-knowledge', component: KnowledgeView },
       { path: 'stats', name: 'admin-stats', component: StatsView },
+      { path: 'models', name: 'admin-models', component: ModelsView },
       { path: 'tools', name: 'admin-tools', component: ToolsView },
       { path: 'users', name: 'admin-users', component: UsersView },
       { path: 'monitoring', name: 'admin-monitoring', component: MonitoringView },
