@@ -142,7 +142,7 @@ def metrics_summary(session: Session, window_minutes: int = 60) -> dict[str, Any
             "median": int(median(latencies)) if latencies else 0,
         },
         "tool_calls": session.execute(select(func.count()).select_from(ToolExecution)).scalar_one(),
-        "token_usage": {"prompt": 0, "completion": 0, "note": "P0 MOCK 模型不产生 Token 用量"},
+        **_token_usage(session),
         "by_path": _group_by_path(rows),
     }
 
@@ -163,3 +163,23 @@ def _group_by_path(rows: list[RequestMetric]) -> list[dict[str, Any]]:
             }
         )
     return result
+def _token_usage(session: Session) -> dict:
+    """按执行记录聚合模型 Token 用量（无模型调用时为 0，并说明口径）。"""
+    prompt_sum = session.execute(
+        select(func.coalesce(func.sum(AgentExecution.prompt_tokens), 0))
+    ).scalar_one()
+    completion_sum = session.execute(
+        select(func.coalesce(func.sum(AgentExecution.completion_tokens), 0))
+    ).scalar_one()
+    calls = session.execute(
+        select(func.count()).select_from(AgentExecution).where(AgentExecution.llm_model.is_not(None))
+    ).scalar_one()
+    return {
+        "token_usage": {
+            "prompt": int(prompt_sum or 0),
+            "completion": int(completion_sum or 0),
+            "total": int((prompt_sum or 0) + (completion_sum or 0)),
+            "llm_calls": int(calls or 0),
+            "note": "按 agent_execution 的 prompt/completion_tokens 聚合（真实模型调用）",
+        }
+    }

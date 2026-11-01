@@ -68,7 +68,8 @@ def test_p95_between_p50_and_max(api):
     latency = data["latency_ms"]
     assert latency["p50"] <= latency["p95"] <= latency["max"]
     assert data["token_usage"]["prompt"] == 0
-    assert "MOCK" in data["token_usage"]["note"]
+    assert data["token_usage"]["total"] == 0
+    assert "agent_execution" in data["token_usage"]["note"]
 
 
 def test_metrics_window_excludes_old_rows(api):

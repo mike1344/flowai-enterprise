@@ -88,6 +88,9 @@ class AgentExecution(Base):
     error_code: Mapped[str | None] = mapped_column(String(60))
     error_message: Mapped[str | None] = mapped_column(Text)
     idempotency_key: Mapped[str | None] = mapped_column(String(80))
+    prompt_tokens: Mapped[int | None] = mapped_column()
+    completion_tokens: Mapped[int | None] = mapped_column()
+    llm_model: Mapped[str | None] = mapped_column(String(120))
     trace_id: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(TimestampType, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(

@@ -52,7 +52,7 @@
 | 浏览器 E2E | 9/9 |
 | 契约一致性 | 双服务测试守护 |
 
-### 已知限制
+### 后续增强（同日完成）\n\n- **真实模型接入**：DeepSeek `deepseek-chat`（OpenAI 兼容）；`app/services/llm.py` + Agent 编排接入；\n  Token 用量落库并在 `/monitoring/metrics` 聚合；无依据不调用模型；失败自动回退并标记 `result.llm.status=fallback`。\n  证据：`docs/audit/25-真实模型接入-DeepSeek-验收证据.md`。\n- 登录失败限流（429）、FlowAI OpenAPI 契约、前端按需引入、干净环境复现。\n\n### 已知限制
 
 见 `docs/delivery/04-最终交付报告.md` §4（性能未覆盖写路径/模型路径、离线哈希嵌入、无 binlog 增量备份、单机架构等）。
 

@@ -93,6 +93,7 @@ def start_execution(
     role: str,
     trace_id: str | None,
     transport=None,
+    llm_transport=None,
 ) -> dict[str, Any]:
     app = session.get(AIApplication, conversation.application_id)
     if app is None or app.status != "PUBLISHED":
@@ -197,6 +198,18 @@ def start_execution(
         if not search["refused"]:
             answer_parts.append(search["answer"])
 
+    # 真实模型回答（有依据时才调用；失败回退到确定性回答，不静默编造）
+    answer_parts = _compose_with_llm(
+        session,
+        app=app,
+        execution=execution,
+        user_message=user_message,
+        answer_parts=answer_parts,
+        citations=citations,
+        has_evidence=bool(device) or bool(citations),
+        transport=llm_transport,
+    )
+
     # 写操作意图 → 生成草稿并要求人工确认（未确认不得写）
     if intent["wants_write"] and device:
         draft = {
@@ -294,6 +307,7 @@ def confirm_operation(
     role: str,
     trace_id: str | None,
     transport=None,
+    llm_transport=None,
 ) -> dict[str, Any]:
     if execution.status != "WAITING_CONFIRMATION":
         raise ApiError(409, "EXECUTION_NOT_WAITING", "该执行不在待确认状态")
@@ -370,6 +384,7 @@ def confirm_duplicate(
     role: str,
     trace_id: str | None,
     transport=None,
+    llm_transport=None,
 ) -> dict[str, Any]:
     if execution.status != "WAITING_DUPLICATE_CONFIRMATION":
         raise ApiError(409, "EXECUTION_NOT_WAITING", "该执行不在待重复确认状态")
@@ -488,6 +503,7 @@ def retry_operation(
     role: str,
     trace_id: str | None,
     transport=None,
+    llm_transport=None,
 ) -> dict[str, Any]:
     """P1：失败/超时后按同一幂等键安全重试；不会产生重复工单。"""
     if execution.status == "SUCCEEDED":
@@ -510,3 +526,70 @@ def retry_operation(
         role=role,
         trace_id=trace_id,
     )
+def _app_model_config(session: Session, app: AIApplication):
+    """取当前发布版本的模型配置；未发布则用草稿配置。"""
+    from app.models import ApplicationVersion, ModelConfig
+
+    config = app.draft_config or {}
+    if app.current_version_id:
+        version = session.get(ApplicationVersion, app.current_version_id)
+        if version is not None:
+            config = version.config or config
+    model_id = config.get("model_config_id")
+    if not model_id:
+        return None
+    return session.get(ModelConfig, int(model_id))
+
+
+def _compose_with_llm(
+    session: Session,
+    *,
+    app: AIApplication,
+    execution: AgentExecution,
+    user_message: str,
+    answer_parts: list[str],
+    citations: list[dict],
+    has_evidence: bool,
+    transport=None,
+) -> list[str]:
+    """调用真实模型润色/组织回答；无依据不调用；失败回退并记录原因。"""
+    from app.services import llm
+
+    config = _app_model_config(session, app)
+    if config is None or config.provider == "MOCK":
+        return answer_parts
+    if not has_evidence:
+        return answer_parts  # 无证据时不调用模型，保持明确拒答语义
+
+    context_lines = list(answer_parts)
+    for citation in citations[:5]:
+        context_lines.append(
+            f"- 引用《{citation.get('document_title')}》（{citation.get('page_label')}）：{citation.get('snippet', '')[:160]}"
+        )
+    context = "\n".join(context_lines) or "（无）"
+
+    system_prompt = (app.draft_config or {}).get("system_prompt") or ""
+    messages = llm.build_messages(system_prompt=system_prompt, context=context, question=user_message)
+
+    try:
+        result = llm.chat(
+            config,
+            messages,
+            transport=transport,
+            timeout=float(getattr(config, "_llm_timeout", 30.0)),
+        )
+    except llm.LlmError as exc:
+        execution.result = {
+            **(execution.result or {}),
+            "llm": {"status": "fallback", "code": exc.code, "message": exc.message},
+        }
+        return answer_parts
+
+    execution.prompt_tokens = result.prompt_tokens
+    execution.completion_tokens = result.completion_tokens
+    execution.llm_model = result.model
+    execution.result = {
+        **(execution.result or {}),
+        "llm": {"status": "used", **result.as_usage()},
+    }
+    return [result.content]

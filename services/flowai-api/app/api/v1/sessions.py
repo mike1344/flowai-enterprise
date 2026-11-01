@@ -146,6 +146,7 @@ async def send_message(
         role=industrial_role(current),
         trace_id=getattr(request.state, "trace_id", None),
         transport=getattr(request.app.state, "connector_transport", None),
+        llm_transport=getattr(request.app.state, "llm_transport", None),
     )
     return ok(result, "执行完成" if result["status"] == "SUCCEEDED" else "等待确认")
 
