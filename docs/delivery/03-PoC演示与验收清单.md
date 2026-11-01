@@ -57,10 +57,10 @@ python ..\..\seed\flowai_seed.py       # admin、mock 模型、售后助手应�
 - [x] ACC-06 工单正常/重复/超时/重试：无未确认写入、不重复创建
 - [x] ACC-07 安全用例 13 项（`docs/acceptance/P0-验收报告-20261101.md`），未授权全部拒绝
 - [x] ACC-08 状态机/事务/乐观锁（IND-15～20）
-- [ ] ACC-09 性能 P95 ≤500ms：**未做独立压测**（运行指标可查，不构成 SLA）
+- [x] ACC-09 性能 P95 ≤500ms（20 并发实测 287/304/307/77ms，`docs/acceptance/ACC-09-性能报告-20261101.md`；单机开发环境，不构成 SLA）
 - [x] ACC-10 20 并发会话无错乱（验收脚本实测 20/20）
 - [x] ACC-11 跨服务 Trace 与日志脱敏
-- [x] ACC-12 单机 Compose 干净环境复现闭环（6 容器 healthy + E2E 8/8）
+- [x] ACC-12 单机 Compose 干净环境复现闭环（6 容器 healthy + 浏览器 E2E 9/9）\n- [x] 故障演练：工业服务停机 → FAILED（不伪成功）→ 恢复后闭环可用（`docs/acceptance/故障注入演练-20261101.md`）
 
 ## 5. 已知限制（对客户透明）
 
