@@ -158,12 +158,12 @@
       ],
       "acceptance": "可测连通性、错误处理、密钥不泄露",
       "priority": "P0",
-      "status": "DOING",
+      "status": "DONE",
       "owner": "DSH 实施代理",
       "started_at": "2026-11-01",
-      "finished_at": "",
-      "evidence": "",
-      "notes": "M02-02 开工：模型适配配置（密钥引用）与连通性测试",
+      "finished_at": "2026-11-01",
+      "evidence": "docs/audit/12-M02-02-验收证据.md（pytest 46 passed；密钥仅存引用、不回显；连通性失败结构化；MySQL 0003_models 已应用）",
+      "notes": "代理验收；外部模型真实连通待提供凭证",
       "weight": 2.667
     },
     {
@@ -174,12 +174,12 @@
       ],
       "acceptance": "≥3 个配置不同的应用可发布",
       "priority": "P0",
-      "status": "TODO",
-      "owner": "",
-      "started_at": "",
+      "status": "DOING",
+      "owner": "DSH 实施代理",
+      "started_at": "2026-11-01",
       "finished_at": "",
       "evidence": "",
-      "notes": "",
+      "notes": "M02-03 开工：AI 应用 CRUD、草稿测试、发布快照与独立 slug",
       "weight": 3.556
     },
     {

@@ -4,6 +4,7 @@
 不得与 Industrial 服务共享模型或数据库凭证（ADR-002）。
 """
 
+from app.models.ai import ModelConfig  # noqa: F401
 from app.models.auth import (  # noqa: F401
     Permission,
     ResourceGrant,
@@ -22,4 +23,5 @@ __all__ = [
     "UserRole",
     "ResourceGrant",
     "UserSession",
+    "ModelConfig",
 ]
