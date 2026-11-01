@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import applications, auth, health, kb, kb_docs, meta, models, sessions, tools
+from app.api.v1 import applications, auth, health, kb, kb_docs, meta, models, monitoring, sessions, tools
 
 api_router = APIRouter()
 api_router.include_router(health.router, prefix="/health", tags=["health"])
@@ -14,3 +14,4 @@ api_router.include_router(kb.router, tags=["knowledge"])
 api_router.include_router(kb_docs.router, tags=["knowledge"])
 api_router.include_router(tools.router, tags=["tools"])
 api_router.include_router(sessions.router, tags=["sessions"])
+api_router.include_router(monitoring.router, tags=["monitoring"])

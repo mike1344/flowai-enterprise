@@ -59,13 +59,37 @@ services:
       start_period: 30s
     networks: [internal]
 
+  flowai-migrate:
+    build:
+      context: ../../services/flowai-api
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      FLOWAI_DATABASE_URL: mysql+pymysql://${FLOWAI_DB_USER:-flowai_app}:${FLOWAI_DB_PASSWORD}@mysql:3306/${FLOWAI_DB_NAME:-flowai_db}?charset=utf8mb4
+    networks: [internal]
+
+  industrial-migrate:
+    build:
+      context: ../../services/industrial-api
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      INDUSTRIAL_DATABASE_URL: mysql+pymysql://${INDUSTRIAL_DB_USER:-industrial_app}:${INDUSTRIAL_DB_PASSWORD}@mysql:3306/${INDUSTRIAL_DB_NAME:-industrial_db}?charset=utf8mb4
+    networks: [internal]
+
   flowai-api:
     build:
       context: ../../services/flowai-api
     restart: unless-stopped
     depends_on:
-      mysql:
-        condition: service_healthy
+      flowai-migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     environment:
@@ -74,12 +98,16 @@ services:
       FLOWAI_DATABASE_URL: mysql+pymysql://${FLOWAI_DB_USER:-flowai_app}:${FLOWAI_DB_PASSWORD}@mysql:3306/${FLOWAI_DB_NAME:-flowai_db}?charset=utf8mb4
       FLOWAI_REDIS_URL: redis://redis:6379/0
       FLOWAI_CHROMA_URL: http://chromadb:8000
+      FLOWAI_INDUSTRIAL_BASE_URL: http://industrial-api:8002
       FLOWAI_SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET}
       FLOWAI_SERVICE_JWT_KID: ${SERVICE_JWT_KID:-k1}
+      FLOWAI_SERVICE_JWT_ISSUER: flowai-api
+      FLOWAI_SERVICE_JWT_AUDIENCE: industrial-api
       FLOWAI_SESSION_SECRET: ${SESSION_SECRET}
       FLOWAI_CSRF_SECRET: ${CSRF_SECRET}
       FLOWAI_PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://127.0.0.1:8080}
       FLOWAI_CORS_ORIGINS: ${PUBLIC_BASE_URL:-http://127.0.0.1:8080}
+      FLOWAI_UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-20}
     healthcheck:
       test:
         - CMD
@@ -97,8 +125,8 @@ services:
       context: ../../services/industrial-api
     restart: unless-stopped
     depends_on:
-      mysql:
-        condition: service_healthy
+      industrial-migrate:
+        condition: service_completed_successfully
     environment:
       INDUSTRIAL_ENVIRONMENT: production
       INDUSTRIAL_LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -128,9 +156,9 @@ services:
     restart: unless-stopped
     depends_on:
       flowai-api:
-        condition: service_started
+        condition: service_healthy
       industrial-api:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "${FRONTEND_PORT:-8080}:80"
     healthcheck:

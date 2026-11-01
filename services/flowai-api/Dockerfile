@@ -1,4 +1,7 @@
-FROM python:3.14-slim
+FROM python:3.13-slim
+
+# 镜像源可通过构建参数覆盖（网络不稳定时用镜像站）
+ARG PIP_INDEX_URL=https://pypi.org/simple
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -8,7 +11,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --index-url "${PIP_INDEX_URL}" --retries 10 --timeout 120 -r requirements.txt
 
 COPY app ./app
 COPY alembic.ini ./

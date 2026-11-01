@@ -1,7 +1,7 @@
 // 通过 CDP 复用已启动的 Chrome 驱动 P0 端到端（规避 Playwright 子进程管道限制）
 import { chromium } from '../frontend/node_modules/playwright-core/index.mjs'
 
-const BASE = 'http://127.0.0.1:5173'
+const BASE = process.env.E2E_BASE || 'http://127.0.0.1:5173'
 const results = []
 function record(name, ok, detail = '') {
   results.push({ name, ok, detail })

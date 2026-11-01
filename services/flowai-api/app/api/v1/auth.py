@@ -55,10 +55,33 @@ async def login(
     session: Session = Depends(get_db),
 ) -> dict:
     settings = request.app.state.settings
-    user = auth_service.authenticate(session, payload.username, payload.password)
+    from app.services import audit as audit_service
+
+    try:
+        user = auth_service.authenticate(session, payload.username, payload.password)
+    except Exception:
+        audit_service.record(
+            session,
+            action="auth.login",
+            actor_ref=payload.username,
+            outcome="DENIED",
+            trace_id=getattr(request.state, "trace_id", None),
+        )
+        session.commit()
+        raise
+    audit_service.record(
+        session,
+        action="auth.login",
+        actor_ref=user.username,
+        outcome="SUCCESS",
+        trace_id=getattr(request.state, "trace_id", None),
+        resource_type="USER",
+        resource_id=user.id,
+    )
     token, record = auth_service.create_session(session, user, settings.session_ttl_minutes)
 
-    secure = settings.environment == "production"
+    # 仅当对外入口为 HTTPS 时设置 Secure（本地 HTTP compose 也能正常登录）
+    secure = settings.public_base_url.lower().startswith("https://")
     response.set_cookie(
         key=SESSION_COOKIE,
         value=token,

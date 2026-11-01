@@ -14,6 +14,7 @@ from app.models.kb import (  # noqa: F401
     IndexVersion,
     KnowledgeBase,
 )
+from app.models.audit import AuditLog, RequestMetric  # noqa: F401
 from app.models.agent import (  # noqa: F401
     AgentExecution,
     Conversation,
@@ -56,4 +57,6 @@ __all__ = [
     "AgentExecution",
     "ToolExecution",
     "OperationConfirmation",
+    "AuditLog",
+    "RequestMetric",
 ]

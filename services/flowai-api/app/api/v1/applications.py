@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -125,12 +125,25 @@ async def test_application(
 @router.post("/applications/{app_id}/publish")
 async def publish_application(
     app_id: int,
+    request: Request,
     current: CurrentUser = Depends(require_permission("app:manage")),
     _csrf: CurrentUser = Depends(verify_csrf),
     session: Session = Depends(get_db),
 ) -> dict:
     app = _get(session, app_id)
     version = app_service.publish(session, app, published_by=current.user.id)
+    from app.services import audit as audit_service
+
+    audit_service.record(
+        session,
+        action="application.publish",
+        actor_ref=current.user.username,
+        trace_id=getattr(request.state, "trace_id", None),
+        resource_type="APPLICATION",
+        resource_id=app.id,
+        detail={"version_no": version.version_no},
+    )
+    session.commit()
     return ok(
         {
             "application_id": app.id,
