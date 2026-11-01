@@ -14,6 +14,13 @@ from app.models.kb import (  # noqa: F401
     IndexVersion,
     KnowledgeBase,
 )
+from app.models.agent import (  # noqa: F401
+    AgentExecution,
+    Conversation,
+    Message,
+    OperationConfirmation,
+    ToolExecution,
+)
 from app.models.tools import ApplicationTool, ToolDefinition  # noqa: F401
 from app.models.auth import (  # noqa: F401
     Permission,
@@ -44,4 +51,9 @@ __all__ = [
     "ApplicationKnowledgeBase",
     "ToolDefinition",
     "ApplicationTool",
+    "Conversation",
+    "Message",
+    "AgentExecution",
+    "ToolExecution",
+    "OperationConfirmation",
 ]

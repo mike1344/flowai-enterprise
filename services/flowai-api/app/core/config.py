@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     trace_header: str = "X-Trace-ID"
     cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
 
+    industrial_base_url: str = "http://127.0.0.1:8002"
+    industrial_timeout_seconds: float = 5.0
+
     database_url: str | None = None
     redis_url: str | None = None
     chroma_url: str | None = None
