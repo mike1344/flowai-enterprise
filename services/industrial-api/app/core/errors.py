@@ -64,11 +64,29 @@ def _error_response(request: Request, status_code: int, code: str, message: str,
     return JSONResponse(status_code=status_code, content=body, headers=_trace_headers(request, trace_id))
 
 
+class ApiError(StarletteHTTPException):
+    """带业务错误码的 HTTP 异常（docs/04 §4 错误码字典）。"""
+
+    def __init__(
+        self,
+        status_code: int,
+        code: str,
+        message: str,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(status_code=status_code, detail=message)
+        self.code = code
+        self.details = details or {}
+
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(StarletteHTTPException)
     async def handle_http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-        code = STATUS_CODE_MAP.get(exc.status_code, "INTERNAL_ERROR")
-        response = _error_response(request, exc.status_code, code, str(exc.detail))
+        # ApiError 可携带业务错误码（docs/04 §4），否则按状态码映射通用码
+        code = getattr(exc, "code", None) or STATUS_CODE_MAP.get(exc.status_code, "INTERNAL_ERROR")
+        details = getattr(exc, "details", None)
+        if details is None:
+            details = getattr(exc, "detail", None) if isinstance(getattr(exc, "detail", None), dict) else {}
+        response = _error_response(request, exc.status_code, code, str(exc.detail), details)
         extra = getattr(exc, "headers", None)
         if extra:
             for key, value in extra.items():

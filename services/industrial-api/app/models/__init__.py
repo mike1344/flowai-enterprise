@@ -11,6 +11,7 @@ from app.models.industrial import (  # noqa: F401
     FaultRecord,
     ProductModel,
 )
+from app.models.tickets import RepairTicket, TicketAction  # noqa: F401
 
 __all__ = [
     "Customer",
@@ -19,4 +20,6 @@ __all__ = [
     "FaultRecord",
     "ServiceUser",
     "ServiceIdentityBinding",
+    "RepairTicket",
+    "TicketAction",
 ]
