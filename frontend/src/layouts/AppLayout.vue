@@ -2,7 +2,7 @@
   <div class="app-shell">
     <header class="app-header">
       <div class="app-title">{{ slug }}</div>
-      <div class="app-meta">独立应用布局 · 会话与工单闭环将在 M05-02 开放</div>
+      <div class="app-meta">独立应用布局 · 会话、引用与工单确认已启用</div>
     </header>
     <main class="app-main">
       <router-view />

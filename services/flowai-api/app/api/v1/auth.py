@@ -234,3 +234,31 @@ async def list_grants(
         },
         "资源授权列表",
     )
+@router.get("/auth/users")
+async def list_users(
+    current: CurrentUser = Depends(require_permission("platform:user:manage")),
+    session: Session = Depends(get_db),
+) -> dict:
+    from sqlalchemy import select as _select
+
+    from app.models import User
+
+    rows = session.execute(_select(User).order_by(User.id)).scalars().all()
+    return ok(
+        {
+            "items": [
+                {
+                    "id": user.id,
+                    "username": user.username,
+                    "display_name": user.display_name,
+                    "email": user.email,
+                    "status": user.status,
+                    "roles": auth_service.user_role_codes(session, user.id),
+                    "permissions": auth_service.user_permission_codes(session, user.id),
+                }
+                for user in rows
+            ],
+            "total": len(rows),
+        },
+        "用户列表",
+    )

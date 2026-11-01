@@ -40,6 +40,22 @@ try {
   await page.getByText('gateway.md').first().waitFor({ timeout: 15000 })
   record('知识库文档列表可见', true)
 
+  // 后台页面巡检：工具中心 / 用户与角色 / 监控与审计 / 平台模块
+  const adminPages = [
+    { menu: '工具中心', heading: '工具中心' },
+    { menu: '用户与角色', heading: '用户与角色' },
+    { menu: '监控与审计', heading: '监控与审计' },
+    { menu: '平台模块', heading: '平台模块实现状态' }
+  ]
+  for (const item of adminPages) {
+    await page.getByRole('menuitem', { name: item.menu }).click()
+    await page.getByRole('heading', { name: item.heading }).waitFor({ timeout: 20000 })
+    record(`后台页面可用：${item.menu}`, true)
+  }
+  await page.getByRole('menuitem', { name: '用户与角色' }).click()
+  await page.getByText('PLATFORM_ADMIN').first().waitFor({ timeout: 20000 })
+  record('用户列表已渲染（admin 存在）', true)
+
   // 通过应用列表“打开”按钮做客户端跳转（避免整页导航）
   await page.getByRole('menuitem', { name: 'AI 应用' }).click()
   const appRow = page.getByRole('row', { name: /service-agent/ })

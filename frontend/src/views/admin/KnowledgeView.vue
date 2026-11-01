@@ -49,6 +49,11 @@
               <el-table-column prop="error_message" label="错误" />
             </el-table>
 
+            <div class="index-bar">
+              <el-button size="small" @click="loadIndexes">索引版本</el-button>
+              <span v-if="activeVersionNo" class="muted">当前 active：v{{ activeVersionNo }}</span>
+            </div>
+
             <div class="search">
               <el-input v-model="query" placeholder="检索测试（需先给用户授予该 KB 的 READ 权限）" size="small" />
               <el-button size="small" @click="search">检索</el-button>
@@ -71,6 +76,30 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <el-dialog v-model="indexDialog" :title="`索引版本 · ${current?.name || ''}`" width="660px">
+      <el-table :data="indexes" size="small" border>
+        <el-table-column prop="version_no" label="版本" width="70" />
+        <el-table-column prop="status" label="状态" width="110" />
+        <el-table-column prop="chunk_count" label="分块" width="80" />
+        <el-table-column label="当前" width="90">
+          <template #default="{ row }">
+            <el-tag v-if="row.is_active" type="success" size="small">active</el-tag>
+            <span v-else class="muted">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="120">
+          <template #default="{ row }">
+            <el-button
+              size="small"
+              :disabled="row.is_active || row.status === 'FAILED' || row.status === 'BUILDING'"
+              @click="activateIndex(row)"
+            >切回</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <p class="muted">只有 READY / DEPRECATED 可切回；构建失败不会覆盖旧索引。</p>
+    </el-dialog>
   </div>
 </template>
 
@@ -88,6 +117,9 @@ const query = ref('')
 const searchResult = ref(null)
 const uploading = ref(false)
 const fileInput = ref(null)
+const indexDialog = ref(false)
+const indexes = ref([])
+const activeVersionNo = ref(null)
 let pendingFile = null
 
 async function load() {
@@ -131,6 +163,22 @@ async function upload() {
   } finally {
     uploading.value = false
   }
+}
+
+async function loadIndexes() {
+  if (!current.value) return
+  const result = await apiGet('flowai', `/knowledge-bases/${current.value.id}/indexes`)
+  indexes.value = result.data.items || []
+  const active = indexes.value.find((item) => item.is_active)
+  activeVersionNo.value = active ? active.version_no : null
+  indexDialog.value = true
+}
+
+async function activateIndex(row) {
+  if (!current.value) return
+  const result = await apiPost('flowai', `/knowledge-bases/${current.value.id}/indexes/${row.id}/activate`)
+  if (!result.ok) error.value = result.code + '：' + result.message
+  await loadIndexes()
 }
 
 async function search() {

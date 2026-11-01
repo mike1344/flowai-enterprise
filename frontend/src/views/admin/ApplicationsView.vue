@@ -33,10 +33,32 @@
         <template #default="{ row }">
           <el-button size="small" @click="publish(row)" :disabled="row.status === 'PUBLISHED'">发布</el-button>
           <el-button size="small" @click="openTools(row)">工具授权</el-button>
+          <el-button size="small" @click="openVersions(row)">版本</el-button>
           <el-button size="small" @click="$router.push(`/apps/${row.slug}`)">打开</el-button>
         </template>
       </el-table-column>
     </el-table>
+
+    <el-dialog v-model="versionDialog" :title="`版本历史 · ${currentApp?.name || ''}`" width="720px">
+      <el-table :data="versions" size="small" border>
+        <el-table-column prop="version_no" label="版本" width="70" />
+        <el-table-column prop="status" label="状态" width="120">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'PUBLISHED' ? 'success' : 'info'" size="small">{{ row.status }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="published_at" label="发布时间" width="200" />
+        <el-table-column label="系统提示词" min-width="260">
+          <template #default="{ row }">{{ (row.config?.system_prompt || '').slice(0, 60) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="110">
+          <template #default="{ row }">
+            <el-button size="small" :disabled="row.status === 'PUBLISHED'" @click="rollback(row)">回滚到此版本</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <p class="muted">快照内容不可变；回滚只切换当前发布版本，权限仍按当前策略校验。</p>
+    </el-dialog>
 
     <el-dialog v-model="toolDialog" title="工具授权" width="520px">
       <div v-if="currentApp">
