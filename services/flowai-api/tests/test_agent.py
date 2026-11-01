@@ -127,9 +127,9 @@ def test_read_only_chat_calls_tools_and_answers(env):
 
     transport, calls = make_transport(
         {
-            "GET /devices/7": ok(DEVICE),
-            "GET /devices/7/faults": ok(FAULTS),
-            "GET /devices/7/tickets": ok(TICKETS),
+            "GET /api/v1/devices/7": ok(DEVICE),
+            "GET /api/v1/devices/7/faults": ok(FAULTS),
+            "GET /api/v1/devices/7/tickets": ok(TICKETS),
         }
     )
     app.state.connector_transport = transport
@@ -146,11 +146,11 @@ def test_read_only_chat_calls_tools_and_answers(env):
     assert data["citations"] == []
 
     titles = [call["path"] for call in calls]
-    assert "/devices/7" in titles
-    assert "/devices/7/faults" in titles
+    assert "/api/v1/devices/7" in titles
+    assert "/api/v1/devices/7/faults" in titles
 
     # 服务令牌带 iss/aud/sub/role，未裸传 user_id
-    device_call = next(call for call in calls if call["path"] == "/devices/7")
+    device_call = next(call for call in calls if call["path"] == "/api/v1/devices/7")
     token = device_call["headers"]["authorization"].split(" ")[1]
     claims = jwt.decode(
         token, SERVICE_SECRET, algorithms=["HS256"], audience="industrial-api", issuer="flowai-api"
@@ -168,9 +168,9 @@ def test_write_intent_requires_confirmation_before_any_write(env):
 
     transport, calls = make_transport(
         {
-            "GET /devices/7": ok(DEVICE),
-            "GET /devices/7/faults": ok(FAULTS),
-            "GET /devices/7/tickets": ok(TICKETS),
+            "GET /api/v1/devices/7": ok(DEVICE),
+            "GET /api/v1/devices/7/faults": ok(FAULTS),
+            "GET /api/v1/devices/7/tickets": ok(TICKETS),
         }
     )
     app.state.connector_transport = transport
@@ -197,11 +197,11 @@ def test_confirm_creates_ticket_with_idempotency_key(env):
 
     transport, calls = make_transport(
         {
-            "GET /devices/7": ok(DEVICE),
-            "GET /devices/7/faults": ok(FAULTS),
-            "GET /devices/7/tickets": ok(TICKETS),
-            "POST /tickets/precheck": ok({"risk_level": "LOW", "existing_tickets": []}),
-            "POST /tickets": (201, {"code": "SUCCESS", "message": "ok", "data": {"ticket_no": "WO-20261101-0001", "status": "PENDING"}, "trace_id": "t"}),
+            "GET /api/v1/devices/7": ok(DEVICE),
+            "GET /api/v1/devices/7/faults": ok(FAULTS),
+            "GET /api/v1/devices/7/tickets": ok(TICKETS),
+            "POST /api/v1/tickets/precheck": ok({"risk_level": "LOW", "existing_tickets": []}),
+            "POST /api/v1/tickets": (201, {"code": "SUCCESS", "message": "ok", "data": {"ticket_no": "WO-20261101-0001", "status": "PENDING"}, "trace_id": "t"}),
         }
     )
     app.state.connector_transport = transport
@@ -221,7 +221,7 @@ def test_confirm_creates_ticket_with_idempotency_key(env):
     assert body["status"] == "SUCCEEDED"
     assert body["ticket_no"] == "WO-20261101-0001"
 
-    write_calls = [call for call in calls if call["method"] == "POST" and call["path"] == "/tickets"]
+    write_calls = [call for call in calls if call["method"] == "POST" and call["path"] == "/api/v1/tickets"]
     assert len(write_calls) == 1
     assert write_calls[0]["headers"]["idempotency-key"]
 
@@ -241,10 +241,10 @@ def test_duplicate_risk_requires_second_confirmation(env):
 
     transport, calls = make_transport(
         {
-            "GET /devices/7": ok(DEVICE),
-            "GET /devices/7/faults": ok(FAULTS),
-            "GET /devices/7/tickets": ok(TICKETS),
-            "POST /tickets/precheck": ok(
+            "GET /api/v1/devices/7": ok(DEVICE),
+            "GET /api/v1/devices/7/faults": ok(FAULTS),
+            "GET /api/v1/devices/7/tickets": ok(TICKETS),
+            "POST /api/v1/tickets/precheck": ok(
                 {
                     "risk_level": "HIGH",
                     "existing_tickets": [{"ticket_no": "WO-OLD-1", "status": "IN_PROGRESS"}],
@@ -252,7 +252,7 @@ def test_duplicate_risk_requires_second_confirmation(env):
                     "expires_in_seconds": 300,
                 }
             ),
-            "POST /tickets": (201, {"code": "SUCCESS", "message": "ok", "data": {"ticket_no": "WO-20261101-0002", "status": "PENDING"}, "trace_id": "t"}),
+            "POST /api/v1/tickets": (201, {"code": "SUCCESS", "message": "ok", "data": {"ticket_no": "WO-20261101-0002", "status": "PENDING"}, "trace_id": "t"}),
         }
     )
     app.state.connector_transport = transport
@@ -270,7 +270,7 @@ def test_duplicate_risk_requires_second_confirmation(env):
     ).json()["data"]
     assert first["status"] == "WAITING_DUPLICATE_CONFIRMATION"
     assert first["existing_tickets"][0]["ticket_no"] == "WO-OLD-1"
-    assert all(call["path"] != "/tickets" for call in calls)
+    assert all(call["path"] != "/api/v1/tickets" for call in calls)
 
     second = api.post(
         f"/api/v1/executions/{started['execution_id']}/confirm-duplicate",
@@ -289,9 +289,9 @@ def test_reject_cancels_without_writing(env):
 
     transport, calls = make_transport(
         {
-            "GET /devices/7": ok(DEVICE),
-            "GET /devices/7/faults": ok(FAULTS),
-            "GET /devices/7/tickets": ok(TICKETS),
+            "GET /api/v1/devices/7": ok(DEVICE),
+            "GET /api/v1/devices/7/faults": ok(FAULTS),
+            "GET /api/v1/devices/7/tickets": ok(TICKETS),
         }
     )
     app.state.connector_transport = transport
@@ -318,11 +318,11 @@ def test_create_timeout_is_not_reported_as_success(env):
 
     transport, _ = make_transport(
         {
-            "GET /devices/7": ok(DEVICE),
-            "GET /devices/7/faults": ok(FAULTS),
-            "GET /devices/7/tickets": ok(TICKETS),
-            "POST /tickets/precheck": ok({"risk_level": "LOW", "existing_tickets": []}),
-            "POST /tickets": "timeout",
+            "GET /api/v1/devices/7": ok(DEVICE),
+            "GET /api/v1/devices/7/faults": ok(FAULTS),
+            "GET /api/v1/devices/7/tickets": ok(TICKETS),
+            "POST /api/v1/tickets/precheck": ok({"risk_level": "LOW", "existing_tickets": []}),
+            "POST /api/v1/tickets": "timeout",
         }
     )
     app.state.connector_transport = transport
@@ -351,9 +351,9 @@ def test_invalid_confirmation_token_is_rejected(env):
 
     transport, _ = make_transport(
         {
-            "GET /devices/7": ok(DEVICE),
-            "GET /devices/7/faults": ok(FAULTS),
-            "GET /devices/7/tickets": ok(TICKETS),
+            "GET /api/v1/devices/7": ok(DEVICE),
+            "GET /api/v1/devices/7/faults": ok(FAULTS),
+            "GET /api/v1/devices/7/tickets": ok(TICKETS),
         }
     )
     app.state.connector_transport = transport

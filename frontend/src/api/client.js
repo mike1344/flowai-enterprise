@@ -1,7 +1,17 @@
-// 统一 HTTP 客户端：同源路径 + X-Trace-ID + envelope 解析（docs/04 §1）
+// 统一 HTTP 客户端：同源路径 + X-Trace-ID + CSRF + envelope 解析（docs/04 §1）
 const SERVICE_BASES = {
   flowai: '/api/flowai',
   industrial: '/api/industrial'
+}
+
+let csrfToken = ''
+
+export function setCsrfToken(token) {
+  csrfToken = token || ''
+}
+
+export function getCsrfToken() {
+  return csrfToken
 }
 
 export function newTraceId() {
@@ -16,17 +26,20 @@ async function request(method, service, path, { body, headers } = {}) {
   if (!base) throw new Error(`unknown service: ${service}`)
 
   const traceId = newTraceId()
+  const requestHeaders = {
+    Accept: 'application/json',
+    'X-Trace-ID': traceId,
+    ...(headers || {})
+  }
+  if (body !== undefined) requestHeaders['Content-Type'] = 'application/json'
+  if (csrfToken) requestHeaders['X-CSRF-Token'] = csrfToken
+
   let response
   try {
     response = await fetch(`${base}${path}`, {
       method,
       credentials: 'include',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        'X-Trace-ID': traceId,
-        ...(headers || {})
-      },
+      headers: requestHeaders,
       body: body === undefined ? undefined : JSON.stringify(body)
     })
   } catch (error) {
@@ -53,3 +66,23 @@ async function request(method, service, path, { body, headers } = {}) {
 
 export const apiGet = (service, path, options) => request('GET', service, path, options)
 export const apiPost = (service, path, options) => request('POST', service, path, options)
+export const apiPatch = (service, path, options) => request('PATCH', service, path, options)
+export const apiDelete = (service, path, options) => request('DELETE', service, path, options)
+
+export async function uploadFile(service, path, file) {
+  const form = new FormData()
+  form.append('file', file)
+  const response = await fetch(`${SERVICE_BASES[service]}${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'X-Trace-ID': newTraceId(), ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}) },
+    body: form
+  })
+  let payload = {}
+  try {
+    payload = await response.json()
+  } catch {
+    payload = {}
+  }
+  return { ok: response.ok, status: response.status, data: payload.data || {}, code: payload.code }
+}

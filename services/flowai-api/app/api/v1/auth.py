@@ -105,6 +105,7 @@ async def me(current: CurrentUser = Depends(get_current_user)) -> dict:
             "status": current.user.status,
             "roles": current.roles,
             "permissions": current.permissions,
+            "csrf_token": current.session_record.csrf_token,
         },
         "当前用户",
     )

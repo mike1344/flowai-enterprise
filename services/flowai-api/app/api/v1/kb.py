@@ -184,3 +184,19 @@ async def search_test(
         limit=payload.limit,
     )
     return ok(result, "检索测试完成")
+@router.get("/applications/{application_id}/knowledge-bases")
+async def list_bound_kbs(
+    application_id: int,
+    current: CurrentUser = Depends(require_permission("app:manage")),
+    session: Session = Depends(get_db),
+) -> dict:
+    from app.models import KnowledgeBase as _KB
+    from app.services import kb as _kb
+
+    bound = _kb.bound_kb_ids(session, application_id)
+    items = []
+    for kb_id in bound:
+        kb = session.get(_KB, kb_id)
+        if kb is not None:
+            items.append({"id": kb.id, "name": kb.name, "status": kb.status})
+    return ok({"items": items, "total": len(items)}, "应用绑定的知识库")

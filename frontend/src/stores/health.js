@@ -16,7 +16,7 @@ export const useHealthStore = defineStore('health', {
       [
         { name: 'flowai-api', port: 8001, result: state.flowai },
         { name: 'industrial-api', port: 8002, result: state.industrial }
-      ].filter(Boolean),
+      ].filter((row) => Boolean(row.result)),
     allHealthy: (state) =>
       Boolean(state.flowai?.ok) && Boolean(state.industrial?.ok)
   },

@@ -87,6 +87,9 @@ class IndustrialConnector:
         if headers:
             request_headers.update(headers)
 
+        prefix = getattr(settings, "industrial_api_prefix", "/api/v1").rstrip("/")
+        if not path.startswith(prefix):
+            path = f"{prefix}{path}"
         try:
             response = self._client.request(
                 method, path, json=json_body, headers=request_headers

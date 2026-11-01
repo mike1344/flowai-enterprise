@@ -7,14 +7,19 @@
       </div>
       <el-menu :default-active="activePath" router class="admin-menu">
         <el-menu-item index="/admin">运行总览</el-menu-item>
+        <el-menu-item index="/admin/applications">AI 应用</el-menu-item>
+        <el-menu-item index="/admin/knowledge">知识库</el-menu-item>
         <el-menu-item index="/admin/systems">平台模块</el-menu-item>
       </el-menu>
-      <div class="aside-hint">P0 逐步开放：应用 / 知识库 / 工具 / 用户 / 监控</div>
+      <div class="aside-hint">P0 逐步开放：工具 / 用户 / 监控</div>
     </el-aside>
     <el-container>
       <el-header class="admin-header">
         <div class="title">FlowAI Enterprise V1.2</div>
-        <div class="subtitle">单仓库 · 双后端 · 单前端 · 阶段 S0</div>
+        <div class="header-right">
+          <span class="subtitle">单仓库 · 双后端 · 单前端</span>
+          <el-button v-if="auth.loggedIn" size="small" text @click="logout">退出</el-button>
+        </div>
       </el-header>
       <el-main class="admin-main">
         <router-view />
@@ -25,10 +30,19 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+
+import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
 const activePath = computed(() => route.path)
+
+async function logout() {
+  await auth.logout()
+  router.push('/login')
+}
 </script>
 
 <style scoped>
