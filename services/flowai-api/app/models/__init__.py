@@ -14,6 +14,7 @@ from app.models.kb import (  # noqa: F401
     IndexVersion,
     KnowledgeBase,
 )
+from app.models.tools import ApplicationTool, ToolDefinition  # noqa: F401
 from app.models.auth import (  # noqa: F401
     Permission,
     ResourceGrant,
@@ -41,4 +42,6 @@ __all__ = [
     "DocumentChunk",
     "IndexVersion",
     "ApplicationKnowledgeBase",
+    "ToolDefinition",
+    "ApplicationTool",
 ]

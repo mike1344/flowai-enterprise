@@ -34,6 +34,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.session_factory = sessionmaker(
             bind=engine, autoflush=False, expire_on_commit=False
         )
+        try:  # 工具注册表随启动幂等初始化；库未迁移时不阻断启动（就绪检查会报 degraded）
+            from sqlalchemy.orm import Session as _Session
+
+            from app.services.tools import seed_tools
+
+            with _Session(engine) as _session:
+                seed_tools(_session)
+        except Exception:  # noqa: BLE001 - 启动不因种子失败而崩溃
+            import logging
+
+            logging.getLogger("app.startup").warning("tool registry seed skipped", exc_info=True)
 
     app.add_middleware(
         CORSMiddleware,
