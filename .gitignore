@@ -1,0 +1,44 @@
+# ---- 密钥与环境（绝不入库）----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+secrets/
+
+# ---- Python ----
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---- Node / 前端 ----
+node_modules/
+dist/
+.vite/
+*.local
+
+# ---- 数据与运行产物 ----
+data/
+logs/
+*.sqlite3
+*.db-journal
+playwright-report/
+test-results/
+chroma_data/
+
+# ---- IDE / OS ----
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# ---- 本地备份 ----
+*.bak
