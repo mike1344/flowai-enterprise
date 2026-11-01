@@ -53,8 +53,19 @@ try {
   record('确认前无成功工单提示', (await page.getByText(/工单已创建：WO-/).count()) === 0)
 
   await page.getByRole('button', { name: '确认创建' }).click()
-  await page.getByText(/工单已创建：WO-/).waitFor({ timeout: 30000 })
-  const ticketText = await page.getByText(/工单已创建：WO-/).first().textContent()
+  // 首次创建直接成功；若已存在未关闭工单，则出现重复风险二次确认
+  const createdLocator = page.getByText(/工单已创建：WO-/)
+  const duplicateCard = page.getByText('发现疑似重复工单，是否仍然创建？')
+  await Promise.race([
+    createdLocator.waitFor({ timeout: 30000 }),
+    duplicateCard.waitFor({ timeout: 30000 })
+  ])
+  if (await duplicateCard.isVisible()) {
+    record('命中重复风险二次确认', true)
+    await page.getByRole('button', { name: '仍然创建' }).click()
+    await createdLocator.waitFor({ timeout: 30000 })
+  }
+  const ticketText = await createdLocator.first().textContent()
   record('确认后创建真实工单', true, (ticketText || '').trim())
 
   await page.reload({ waitUntil: 'commit' }).catch(() => {})
