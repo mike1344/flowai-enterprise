@@ -5,6 +5,7 @@
 """
 
 from app.models.ai import ModelConfig  # noqa: F401
+from app.models.apps import AIApplication, ApplicationVersion  # noqa: F401
 from app.models.auth import (  # noqa: F401
     Permission,
     ResourceGrant,
@@ -24,4 +25,6 @@ __all__ = [
     "ResourceGrant",
     "UserSession",
     "ModelConfig",
+    "AIApplication",
+    "ApplicationVersion",
 ]
