@@ -31,7 +31,7 @@ from app.services import rag as rag_service
 from app.services.connector import ConnectorError, ConnectorTimeout, IndustrialConnector, record_tool
 
 CONFIRM_TTL_SECONDS = 300
-WRITE_KEYWORDS = ("创建工单", "报修", "维修申请", "帮我建单", "开单")
+WRITE_KEYWORDS = ("创建工单", "报修", "维修申请", "申请维修", "帮我建单", "开单", "需要开单")
 
 
 def params_digest(payload: dict[str, Any]) -> str:

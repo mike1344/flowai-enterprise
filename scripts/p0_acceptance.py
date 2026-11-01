@@ -133,6 +133,41 @@ def main() -> int:
         else:
             check("伪造写操作确认令牌 → 403", False, f"unexpected status {started.get('status')}", "security")
 
+        # 未授权工具调用（草稿应用未绑定任何工具）→ 403
+        probe = c.post(
+            f"{FLOWAI}/applications/{draft['id']}/tools/get_ticket_status/validate",
+            json={"arguments": {"ticket_id": 1}},
+            headers=headers,
+        )
+        check(
+            "未授权工具调用 → 403",
+            probe.status_code == 403,
+            f"status={probe.status_code} code={probe.json().get('code')}",
+            "security",
+        )
+
+        # 登出缺 CSRF → 403（变更请求必须带 CSRF）
+        logout_without_csrf = c.post(f"{FLOWAI}/auth/logout")
+        check(
+            "登出缺 CSRF → 403",
+            logout_without_csrf.status_code == 403,
+            f"status={logout_without_csrf.status_code}",
+            "security",
+        )
+
+        # 会话撤销后访问 → 401
+        with client() as worker:
+            worker_csrf = login(worker)
+            worker_headers = {"X-CSRF-Token": worker_csrf}
+            worker.post(f"{FLOWAI}/auth/logout", headers=worker_headers)
+            after_logout = worker.get(f"{FLOWAI}/auth/me")
+        check(
+            "登出后会话失效 → 401",
+            after_logout.status_code == 401,
+            f"status={after_logout.status_code}",
+            "security",
+        )
+
         # ---------------- 并发会话 ----------------
         def one_session(index: int) -> bool:
             with client() as worker:
