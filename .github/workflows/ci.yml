@@ -34,6 +34,11 @@ jobs:
           alembic upgrade head
       - name: Tests
         run: pytest -q
+      - name: OpenAPI contract must be in sync
+        working-directory: .
+        run: |
+          python services/${{ matrix.service }}/scripts/export_openapi.py
+          git diff --exit-code packages/contracts/${{ matrix.service }}.openapi.json
 
   frontend:
     name: frontend build
