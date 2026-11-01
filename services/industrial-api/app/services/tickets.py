@@ -76,6 +76,7 @@ def create_ticket(
     requester_ref: str,
     actor_type: str = "USER",
     trace_id: str | None = None,
+    commit: bool = True,
 ) -> RepairTicket:
     device = session.get(Device, device_id)
     if device is None:
@@ -124,7 +125,10 @@ def create_ticket(
                 details={"device_id": device.id, "fault_id": fault_id, "priority": priority},
                 trace_id=trace_id,
             )
-            session.commit()
+            if commit:
+                session.commit()
+            else:
+                session.flush()
             session.refresh(ticket)
             return ticket
         except IntegrityError:

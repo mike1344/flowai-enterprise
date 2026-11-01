@@ -151,7 +151,7 @@ def create_ticket(api: TestClient, scenario, subject: str = "cust-t") -> dict:
             "priority": "NORMAL",
             "reported_fault_code": "E03",
         },
-        headers=bearer(subject),
+        headers={**bearer(subject), "Idempotency-Key": f"ticket-{uuid.uuid4().hex}"},
     )
     assert response.status_code == 201, response.text
     return response.json()["data"]
@@ -335,7 +335,7 @@ def test_customer_user_cannot_read_other_customer_ticket(api, scenario):
             "title": "另一客户故障",
             "description": "不可见",
         },
-        headers=bearer("cust-t"),
+        headers={**bearer("cust-t"), "Idempotency-Key": f"ticket-{uuid.uuid4().hex}"},
     )
     assert other_ticket.status_code == 404
 
@@ -370,7 +370,7 @@ def test_ticket_creation_rolls_back_when_action_fails(api, scenario, monkeypatch
                 "title": "事务测试",
                 "description": "工单与操作记录必须同事务",
             },
-            headers=bearer("cust-t"),
+            headers={**bearer("cust-t"), "Idempotency-Key": f"ticket-{uuid.uuid4().hex}"},
         )
 
     engine = build_engine(str(api.app.state.settings.database_url))

@@ -1,6 +1,4 @@
-"""工单接口：创建、查询、分配、状态变更、操作历史（docs/04 §2）。"""
-
-from typing import Any
+"""工单接口：预检查、创建（幂等 + 重复确认）、查询、分配、状态变更、操作历史（docs/04 §2）。"""
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -8,15 +6,18 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.core.errors import ok
+from app.core.errors import ApiError, ok
 from app.core.identity import BusinessContext, get_business_context
 from app.models import Customer, Device, RepairTicket, TicketAction
 from app.schemas.tickets import (
     TicketAssign,
     TicketCreate,
+    TicketPrecheck,
     TicketStatusChange,
     serialize_ticket,
 )
+from app.services import duplicates as duplicate_service
+from app.services import idempotency
 from app.services.tickets import assign_ticket, change_status, create_ticket
 
 router = APIRouter()
@@ -45,25 +46,150 @@ def _require_service_role(context: BusinessContext) -> None:
 
 def load_ticket(session: Session, ticket_id: int, context: BusinessContext) -> RepairTicket:
     ticket = session.get(RepairTicket, ticket_id)
-    if ticket is None:
-        raise HTTPException(status_code=404, detail="工单不存在或不可见")
-    if not context.can_read_customer(ticket.customer_id):
+    if ticket is None or not context.can_read_customer(ticket.customer_id):
         raise HTTPException(status_code=404, detail="工单不存在或不可见")
     return ticket
+
+
+def _business_payload(payload) -> dict:
+    return {
+        "device_id": payload.device_id,
+        "fault_id": payload.fault_id,
+        "reported_fault_code": payload.reported_fault_code,
+        "title": payload.title,
+        "description": payload.description,
+        "priority": payload.priority,
+    }
+
+
+def _ensure_device_visible(
+    session: Session, context: BusinessContext, device_id: int
+) -> Device:
+    device = session.get(Device, device_id)
+    if device is None or not context.can_read_customer(device.customer_id):
+        raise HTTPException(status_code=404, detail="设备不存在或不可见")
+    return device
+
+
+@router.post("/tickets/precheck")
+async def precheck(
+    payload: TicketPrecheck,
+    context: BusinessContext = Depends(get_business_context),
+    session: Session = Depends(get_db),
+) -> dict:
+    """只读预检：校验权限/设备/故障/重复候选，不写业务工单（IND-08）。"""
+    _ensure_device_visible(session, context, payload.device_id)
+
+    business = _business_payload(payload)
+    digest = duplicate_service.params_digest(business)
+    candidates = duplicate_service.find_duplicate_candidates(
+        session,
+        device_id=payload.device_id,
+        fault_id=payload.fault_id,
+        reported_fault_code=payload.reported_fault_code,
+        title=payload.title,
+    )
+
+    token = None
+    ttl = None
+    if candidates:
+        token, ttl = duplicate_service.issue_confirmation(
+            session,
+            caller_scope=context.subject,
+            params_digest_value=digest,
+            candidates=candidates,
+        )
+
+    return ok(
+        {
+            "risk_level": "HIGH" if candidates else "LOW",
+            "existing_tickets": duplicate_service.summarize_candidates(candidates),
+            "confirmation_token": token,
+            "expires_in_seconds": ttl,
+            "params_digest": digest,
+        },
+        "工单预检查完成",
+    )
 
 
 @router.post("/tickets", status_code=201)
 async def create(
     payload: TicketCreate,
     request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     context: BusinessContext = Depends(get_business_context),
     session: Session = Depends(get_db),
-) -> JSONResponse:
-    device = session.get(Device, payload.device_id)
-    if device is None or not context.can_read_customer(device.customer_id):
-        raise HTTPException(status_code=404, detail="设备不存在或不可见")
+):
+    if not idempotency_key:
+        raise ApiError(400, "INVALID_REQUEST", "写请求必须携带 Idempotency-Key")
 
-    actor_type, actor_ref = _actor(context)
+    _ensure_device_visible(session, context, payload.device_id)
+
+    business = _business_payload(payload)
+    digest = duplicate_service.params_digest(business)
+    fingerprint = idempotency.request_fingerprint(business)
+
+    # 1) 幂等重放优先：同一意图重试必须返回原结果（即使该意图已产生工单）
+    replay = idempotency.lookup(
+        session,
+        operation="create_ticket",
+        caller_scope=context.subject,
+        idempotency_key=idempotency_key,
+        request_hash=fingerprint,
+    )
+    if replay is not None:
+        session.rollback()
+        return JSONResponse(status_code=replay["status_code"], content=replay["body"])
+
+    candidates = duplicate_service.find_duplicate_candidates(
+        session,
+        device_id=payload.device_id,
+        fault_id=payload.fault_id,
+        reported_fault_code=payload.reported_fault_code,
+        title=payload.title,
+    )
+
+    # 2) 疑似重复且未携带确认令牌：签发短期令牌并 409，要求二次确认（IND-09）
+    if candidates and not payload.confirmation_token:
+        token, ttl = duplicate_service.issue_confirmation(
+            session,
+            caller_scope=context.subject,
+            params_digest_value=digest,
+            candidates=candidates,
+        )
+        raise ApiError(
+            409,
+            "DUPLICATE_TICKET_CONFIRMATION_REQUIRED",
+            "发现疑似重复的未关闭工单",
+            details={
+                "existing_tickets": duplicate_service.summarize_candidates(candidates),
+                "confirmation_token": token,
+                "expires_in_seconds": ttl,
+            },
+        )
+
+    # 3) 占用幂等键（与工单创建同事务；异常时整体回滚，不留 PROCESSING）
+    record, replay = idempotency.begin(
+        session,
+        operation="create_ticket",
+        caller_scope=context.subject,
+        idempotency_key=idempotency_key,
+        request_hash=fingerprint,
+    )
+    if replay is not None:
+        session.rollback()
+        return JSONResponse(status_code=replay["status_code"], content=replay["body"])
+
+    if candidates:
+        duplicate_service.consume_confirmation(
+            session,
+            token=payload.confirmation_token or "",
+            caller_scope=context.subject,
+            expected_params_digest=digest,
+            candidates=candidates,
+        )
+
+    actor_type, _actor_ref = _actor(context)
     ticket = create_ticket(
         session,
         device_id=payload.device_id,
@@ -76,8 +202,20 @@ async def create(
         requester_ref=context.subject,
         actor_type=actor_type,
         trace_id=getattr(request.state, "trace_id", None),
+        commit=False,
     )
-    return JSONResponse(status_code=201, content=ok(serialize_ticket(ticket), "维修工单创建成功"))
+
+    body = ok(serialize_ticket(ticket), "维修工单创建成功")
+    idempotency.succeed(
+        session,
+        record,
+        resource_type="repair_ticket",
+        resource_id=ticket.id,
+        response_status=201,
+        response_body=body,
+    )
+    session.commit()
+    return JSONResponse(status_code=201, content=body)
 
 
 @router.get("/tickets/{ticket_id}")
@@ -203,9 +341,7 @@ async def device_tickets(
     context: BusinessContext = Depends(get_business_context),
     session: Session = Depends(get_db),
 ) -> dict:
-    device = session.get(Device, device_id)
-    if device is None or not context.can_read_customer(device.customer_id):
-        raise HTTPException(status_code=404, detail="设备不存在或不可见")
+    _ensure_device_visible(session, context, device_id)
 
     stmt = select(RepairTicket).where(RepairTicket.device_id == device_id)
     count_stmt = (

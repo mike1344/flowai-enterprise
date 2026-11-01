@@ -4,6 +4,7 @@
 不得与 FlowAI 服务共享模型或数据库凭证（ADR-002）。
 """
 
+from app.models.idempotency import DuplicateConfirmation, IdempotencyRecord  # noqa: F401
 from app.models.identity import ServiceIdentityBinding, ServiceUser  # noqa: F401
 from app.models.industrial import (  # noqa: F401
     Customer,
@@ -22,4 +23,6 @@ __all__ = [
     "ServiceIdentityBinding",
     "RepairTicket",
     "TicketAction",
+    "IdempotencyRecord",
+    "DuplicateConfirmation",
 ]

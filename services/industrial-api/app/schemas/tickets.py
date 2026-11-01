@@ -22,6 +22,16 @@ class TicketCreate(_Strict):
     description: str = Field(min_length=1)
     priority: TicketPriority = "NORMAL"
     source: TicketSource = "MANUAL"
+    confirmation_token: str | None = Field(default=None, max_length=200)
+
+
+class TicketPrecheck(_Strict):
+    device_id: int = Field(gt=0)
+    fault_id: int | None = Field(default=None, gt=0)
+    reported_fault_code: str | None = Field(default=None, max_length=40)
+    title: str = Field(min_length=1, max_length=150)
+    description: str = Field(min_length=1)
+    priority: TicketPriority = "NORMAL"
 
 
 class TicketAssign(_Strict):
