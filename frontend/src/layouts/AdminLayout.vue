@@ -21,6 +21,7 @@
     <el-container>
       <el-header class="admin-header">
         <div class="title">FlowAI Enterprise V1.2</div>
+        <div class="build-tag">build {{ buildStamp }}</div>
         <div class="header-right">
           <span class="subtitle">单仓库 · 双后端 · 单前端</span>
           <el-button v-if="auth.loggedIn" size="small" text @click="logout">退出</el-button>
@@ -36,6 +37,9 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+
+// 构建标识：一眼确认浏览器加载的是否为最新构建（避免缓存导致看到旧页面）
+const buildStamp = computed(() => (typeof __BUILD_STAMP__ !== 'undefined' ? __BUILD_STAMP__ : 'dev'))
 
 import { useAuthStore } from '../stores/auth'
 

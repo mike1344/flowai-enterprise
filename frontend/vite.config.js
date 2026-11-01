@@ -6,7 +6,12 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 // 开发期代理：/api/flowai/** -> flowai-api /api/v1/**；/api/industrial/** -> industrial-api /api/v1/**
 // 生产由 nginx 做同源反向代理（docs/01 §2、ADR-013 §4）
+const buildStamp = new Date().toISOString().slice(0, 16).replace("T", " ")
+
 export default defineConfig({
+  define: {
+    __BUILD_STAMP__: JSON.stringify(buildStamp)
+  },
   plugins: [
     vue(),
     // Element Plus 按需引入，避免整包进入首屏 bundle
