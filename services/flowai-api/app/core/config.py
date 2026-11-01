@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     session_secret: str | None = None
     csrf_secret: str | None = None
     session_ttl_minutes: int = 60
+    login_max_attempts: int = 5
+    login_window_seconds: int = 300
     upload_max_mb: int = 20
     log_retention_days: int = 30
     public_base_url: str = "http://127.0.0.1:8080"

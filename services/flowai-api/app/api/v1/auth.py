@@ -55,11 +55,24 @@ async def login(
     session: Session = Depends(get_db),
 ) -> dict:
     settings = request.app.state.settings
+    from app.core import ratelimit
+    from app.core.deps_ip import client_ip
     from app.services import audit as audit_service
+
+    ip = client_ip(request)
+    ratelimit.check_allowed(
+        payload.username,
+        ip,
+        max_attempts=settings.login_max_attempts,
+        window_seconds=settings.login_window_seconds,
+    )
 
     try:
         user = auth_service.authenticate(session, payload.username, payload.password)
     except Exception:
+        ratelimit.record_failure(
+            payload.username, ip, window_seconds=settings.login_window_seconds
+        )
         audit_service.record(
             session,
             action="auth.login",
@@ -69,6 +82,7 @@ async def login(
         )
         session.commit()
         raise
+    ratelimit.clear(payload.username, ip)
     audit_service.record(
         session,
         action="auth.login",
