@@ -2,7 +2,7 @@
 
 from collections.abc import Iterator
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
@@ -25,7 +25,16 @@ def _engine_kwargs(url: str, pooled: bool) -> dict:
 
 
 def build_engine(url: str, pooled: bool = True) -> Engine:
-    return create_engine(url, **_engine_kwargs(url, pooled))
+    engine = create_engine(url, **_engine_kwargs(url, pooled))
+    if url.startswith("sqlite"):
+
+        @event.listens_for(engine, "connect")
+        def _enable_sqlite_foreign_keys(dbapi_connection, _record):  # pragma: no cover - driver hook
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
+    return engine
 
 
 def database_reachable(url: str) -> bool:
