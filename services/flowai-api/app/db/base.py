@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, MetaData
+from sqlalchemy import BigInteger, DateTime, Integer, MetaData
 from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import DeclarativeBase
 
@@ -17,6 +17,9 @@ NAMING_CONVENTION = {
 
 # MySQL 使用 DATETIME(6)，SQLite 使用通用 DateTime（docs/03：时间 UTC DATETIME(6)）
 TimestampType = DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql")
+
+# BIGINT 主键；SQLite 需 INTEGER PRIMARY KEY 才能自增（仅测试用）
+BigIntType = BigInteger().with_variant(Integer, "sqlite")
 
 
 class Base(DeclarativeBase):

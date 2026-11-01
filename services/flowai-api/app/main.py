@@ -13,6 +13,8 @@ from app.core.errors import register_error_handlers
 from app.core.logging import AccessLogMiddleware, configure_logging
 from app.core.readiness import dependency_checks, is_ready
 from app.core.trace import TraceIdMiddleware
+from app.db.session import build_engine
+from sqlalchemy.orm import sessionmaker
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -25,6 +27,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         description="平台 API：RBAC、AI 应用、知识库、Agent、Trace（P0 逐步实现）",
     )
     app.state.settings = settings
+
+    if settings.database_url:
+        engine = build_engine(settings.database_url)
+        app.state.db_engine = engine
+        app.state.session_factory = sessionmaker(
+            bind=engine, autoflush=False, expire_on_commit=False
+        )
 
     app.add_middleware(
         CORSMiddleware,
