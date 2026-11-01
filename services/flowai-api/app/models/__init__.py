@@ -6,6 +6,14 @@
 
 from app.models.ai import ModelConfig  # noqa: F401
 from app.models.apps import AIApplication, ApplicationVersion  # noqa: F401
+from app.models.kb import (  # noqa: F401
+    ApplicationKnowledgeBase,
+    Document,
+    DocumentChunk,
+    DocumentVersion,
+    IndexVersion,
+    KnowledgeBase,
+)
 from app.models.auth import (  # noqa: F401
     Permission,
     ResourceGrant,
@@ -27,4 +35,10 @@ __all__ = [
     "ModelConfig",
     "AIApplication",
     "ApplicationVersion",
+    "KnowledgeBase",
+    "Document",
+    "DocumentVersion",
+    "DocumentChunk",
+    "IndexVersion",
+    "ApplicationKnowledgeBase",
 ]
