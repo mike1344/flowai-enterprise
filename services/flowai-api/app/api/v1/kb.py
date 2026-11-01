@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -200,3 +200,55 @@ async def list_bound_kbs(
         if kb is not None:
             items.append({"id": kb.id, "name": kb.name, "status": kb.status})
     return ok({"items": items, "total": len(items)}, "应用绑定的知识库")
+@router.get("/knowledge-bases/{kb_id}/indexes")
+async def list_indexes(
+    kb_id: int,
+    current: CurrentUser = Depends(require_permission("kb:manage")),
+    session: Session = Depends(get_db),
+) -> dict:
+    kb_service.get_kb(session, kb_id)
+    rows = rag_service.list_index_versions(session, kb_id)
+    return ok(
+        {
+            "items": [
+                {
+                    "id": row.id,
+                    "version_no": row.version_no,
+                    "status": row.status,
+                    "is_active": row.is_active,
+                    "chunk_count": row.chunk_count,
+                    "created_at": row.created_at.isoformat(),
+                }
+                for row in rows
+            ]
+        },
+        "索引版本列表",
+    )
+
+
+@router.post("/knowledge-bases/{kb_id}/indexes/{index_id}/activate")
+async def activate_index(
+    kb_id: int,
+    index_id: int,
+    request: Request,
+    current: CurrentUser = Depends(require_permission("kb:manage")),
+    _csrf: CurrentUser = Depends(verify_csrf),
+    session: Session = Depends(get_db),
+) -> dict:
+    from app.services import audit as audit_service
+
+    target = rag_service.activate_index_version(session, kb_id, index_id)
+    audit_service.record(
+        session,
+        action="kb.index.activate",
+        actor_ref=current.user.username,
+        trace_id=getattr(request.state, "trace_id", None),
+        resource_type="KNOWLEDGE_BASE",
+        resource_id=kb_id,
+        detail={"index_version": target.version_no},
+    )
+    session.commit()
+    return ok(
+        {"kb_id": kb_id, "index_id": target.id, "version_no": target.version_no, "is_active": True},
+        "索引版本已切换",
+    )

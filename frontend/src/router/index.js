@@ -6,6 +6,7 @@ import DashboardView from '../views/admin/DashboardView.vue'
 import ApplicationsView from '../views/admin/ApplicationsView.vue'
 import KnowledgeView from '../views/admin/KnowledgeView.vue'
 import LoginView from '../views/admin/LoginView.vue'
+import StatsView from '../views/admin/StatsView.vue'
 import SystemsView from '../views/admin/SystemsView.vue'
 import AppChatView from '../views/apps/AppChatView.vue'
 import { useAuthStore } from '../stores/auth'
@@ -20,6 +21,7 @@ const routes = [
       { path: '', name: 'admin-dashboard', component: DashboardView },
       { path: 'applications', name: 'admin-applications', component: ApplicationsView },
       { path: 'knowledge', name: 'admin-knowledge', component: KnowledgeView },
+      { path: 'stats', name: 'admin-stats', component: StatsView },
       { path: 'systems', name: 'admin-systems', component: SystemsView }
     ]
   },

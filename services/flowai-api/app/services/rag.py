@@ -141,6 +141,7 @@ def ingest_document(session: Session, document: Document, raw_path: Path) -> Doc
     """解析 → 分块 → 向量 → 文档 READY → 索引就绪切换。失败写入 FAILED 且不动旧索引。"""
     kind = detect_kind(document.content_type, document.filename or document.title)
     index_version = _new_index_version(session, document.knowledge_base_id)
+    index_version_id = index_version.id
     try:
         document.status = "PROCESSING"
         session.commit()
@@ -202,11 +203,18 @@ def ingest_document(session: Session, document: Document, raw_path: Path) -> Doc
         return document
     except Exception as exc:  # noqa: BLE001 - 失败必须可见且不影响旧索引
         session.rollback()
-        document.status = "FAILED"
-        document.error_message = str(exc)[:500]
-        index_version.status = "FAILED"
+        failed_version = session.get(IndexVersion, index_version_id)
+        if failed_version is not None:
+            failed_version.status = "FAILED"
+            failed_version.is_active = False
+        current = session.get(Document, document.id)
+        if current is not None:
+            current.status = "FAILED"
+            current.error_message = str(exc)[:500]
         session.commit()
-        session.refresh(document)
+        if current is not None:
+            session.refresh(current)
+            return current
         return document
 
 
@@ -328,3 +336,36 @@ def answer_with_evidence(session: Session, **kwargs) -> dict[str, Any]:
     top = result["items"][0]
     result["answer"] = f"依据《{top['document_title']}》：{top['snippet']}"
     return result
+def list_index_versions(session: Session, kb_id: int) -> list[IndexVersion]:
+    return list(
+        session.execute(
+            select(IndexVersion)
+            .where(IndexVersion.knowledge_base_id == kb_id)
+            .order_by(IndexVersion.version_no)
+        ).scalars()
+    )
+
+
+def activate_index_version(session: Session, kb_id: int, index_id: int) -> IndexVersion:
+    """P1：切回历史 READY 索引；只有 READY 可被激活，失败/构建中不可切换。"""
+    target = session.get(IndexVersion, index_id)
+    if target is None or target.knowledge_base_id != kb_id:
+        raise ApiError(404, "INDEX_NOT_FOUND", "索引版本不存在")
+    if target.status not in {"READY", "DEPRECATED"}:
+        raise ApiError(422, "INDEX_NOT_READY", "只有 READY 索引可被切换")
+    if target.is_active:
+        raise ApiError(409, "INDEX_ALREADY_ACTIVE", "该索引已是当前版本")
+
+    for version in session.execute(
+        select(IndexVersion).where(IndexVersion.knowledge_base_id == kb_id)
+    ).scalars():
+        if version.id == target.id:
+            version.is_active = True
+            version.status = "READY"
+        elif version.is_active:
+            version.is_active = False
+            if version.status == "READY":
+                version.status = "DEPRECATED"
+    session.commit()
+    session.refresh(target)
+    return target

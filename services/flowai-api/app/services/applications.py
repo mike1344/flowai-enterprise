@@ -206,3 +206,42 @@ def public_view(session: Session, slug: str) -> dict[str, Any]:
         "version_no": version.version_no if version else None,
         "write_confirmation": bool((version.config if version else {}).get("write_confirmation", True)),
     }
+def rollback_to_version(
+    session: Session, app: AIApplication, *, version_no: int, actor_id: int | None
+) -> ApplicationVersion:
+    """P1：切回历史发布快照。快照内容不可变，仅切换 current_version 与草稿。
+
+    权限仍按当前策略校验（调用方负责鉴权），回滚不会放宽任何授权。
+    """
+    target = session.execute(
+        select(ApplicationVersion).where(
+            ApplicationVersion.application_id == app.id,
+            ApplicationVersion.version_no == version_no,
+        )
+    ).scalar_one_or_none()
+    if target is None:
+        raise ApiError(404, "VERSION_NOT_FOUND", "版本不存在")
+    if target.status == "PUBLISHED" and app.current_version_id == target.id:
+        raise ApiError(409, "VERSION_ALREADY_ACTIVE", "该版本已是当前发布版本")
+
+    for version in session.execute(
+        select(ApplicationVersion).where(ApplicationVersion.application_id == app.id)
+    ).scalars():
+        version.status = "PUBLISHED" if version.id == target.id else "SUPERSEDED"
+
+    app.current_version_id = target.id
+    app.status = "PUBLISHED"
+    app.draft_config = dict(target.config)
+    session.commit()
+    session.refresh(target)
+    return target
+
+
+def list_versions(session: Session, app: AIApplication) -> list[ApplicationVersion]:
+    return list(
+        session.execute(
+            select(ApplicationVersion)
+            .where(ApplicationVersion.application_id == app.id)
+            .order_by(ApplicationVersion.version_no)
+        ).scalars()
+    )

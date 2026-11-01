@@ -203,3 +203,38 @@ async def public_application(
 ) -> dict:
     """已发布应用的公开入口信息；未发布/停用一律 404（不泄露存在性）。"""
     return ok(app_service.public_view(session, slug), "应用公开信息")
+@router.post("/applications/{app_id}/versions/{version_no}/rollback")
+async def rollback_application(
+    app_id: int,
+    version_no: int,
+    request: Request,
+    current: CurrentUser = Depends(require_permission("app:manage")),
+    _csrf: CurrentUser = Depends(verify_csrf),
+    session: Session = Depends(get_db),
+) -> dict:
+    app = _get(session, app_id)
+    version = app_service.rollback_to_version(
+        session, app, version_no=version_no, actor_id=current.user.id
+    )
+    from app.services import audit as audit_service
+
+    audit_service.record(
+        session,
+        action="application.rollback",
+        actor_ref=current.user.username,
+        trace_id=getattr(request.state, "trace_id", None),
+        resource_type="APPLICATION",
+        resource_id=app.id,
+        detail={"version_no": version.version_no},
+    )
+    session.commit()
+    return ok(
+        {
+            "application_id": app.id,
+            "version_id": version.id,
+            "version_no": version.version_no,
+            "status": app.status,
+            "public_path": f"/apps/{app.slug}",
+        },
+        "已切换到历史版本",
+    )

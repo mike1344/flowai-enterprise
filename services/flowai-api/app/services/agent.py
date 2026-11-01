@@ -479,3 +479,34 @@ def cancel_execution(session: Session, execution: AgentExecution) -> dict[str, A
     _append_assistant(session, execution.conversation_id, "已取消该操作，未写入任何业务数据。", [], execution.id)
     session.commit()
     return {"execution_id": execution.id, "status": execution.status}
+def retry_operation(
+    session: Session,
+    *,
+    settings: Settings,
+    execution: AgentExecution,
+    subject: str,
+    role: str,
+    trace_id: str | None,
+    transport=None,
+) -> dict[str, Any]:
+    """P1：失败/超时后按同一幂等键安全重试；不会产生重复工单。"""
+    if execution.status == "SUCCEEDED":
+        raise ApiError(409, "EXECUTION_ALREADY_SUCCEEDED", "该执行已成功，无需重试")
+    if execution.status not in {"FAILED", "TIMED_OUT"}:
+        raise ApiError(409, "EXECUTION_NOT_RETRYABLE", "当前状态不可重试")
+    if not execution.idempotency_key or not execution.draft_operation:
+        raise ApiError(422, "EXECUTION_NOT_RETRYABLE", "缺少幂等键或操作草稿，无法安全重试")
+
+    connector = IndustrialConnector(settings, transport=transport)
+    return _create_ticket(
+        session,
+        settings=settings,
+        execution=execution,
+        connector=connector,
+        draft=execution.draft_operation,
+        confirmation_record=None,
+        duplicate_token=None,
+        subject=subject,
+        role=role,
+        trace_id=trace_id,
+    )

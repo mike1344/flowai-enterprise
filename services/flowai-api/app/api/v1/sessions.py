@@ -232,3 +232,73 @@ async def reject_execution(
     if execution is None or execution.user_id != current.user.id:
         raise ApiError(404, "EXECUTION_NOT_FOUND", "执行不存在")
     return ok(agent_service.cancel_execution(session, execution), "已取消")
+@router.get("/executions/{execution_id}/steps")
+async def execution_steps(
+    execution_id: int,
+    current: CurrentUser = Depends(get_current_user),
+    session: Session = Depends(get_db),
+) -> dict:
+    """P1：执行可视化——只暴露结构化步骤，不暴露模型内部推理链。"""
+    from sqlalchemy import select as _select
+
+    from app.models import ToolExecution
+
+    execution = session.get(AgentExecution, execution_id)
+    if execution is None or execution.user_id != current.user.id:
+        raise ApiError(404, "EXECUTION_NOT_FOUND", "执行不存在")
+
+    steps = session.execute(
+        _select(ToolExecution)
+        .where(ToolExecution.execution_id == execution.id)
+        .order_by(ToolExecution.id)
+    ).scalars()
+    return ok(
+        {
+            "execution_id": execution.id,
+            "status": execution.status,
+            "error_code": execution.error_code,
+            "steps": [
+                {
+                    "step": index + 1,
+                    "tool_code": row.tool_code,
+                    "status": row.status,
+                    "latency_ms": row.latency_ms,
+                    "trace_id": row.trace_id,
+                    "created_at": row.created_at.isoformat(),
+                }
+                for index, row in enumerate(steps)
+            ],
+        },
+        "执行步骤",
+    )
+
+
+@router.post("/executions/{execution_id}/retry")
+async def retry_execution(
+    execution_id: int,
+    request: Request,
+    current: CurrentUser = Depends(verify_csrf),
+    session: Session = Depends(get_db),
+) -> dict:
+    """P1：失败/超时的安全重试——复用同一幂等键，已成功则不再写入。"""
+    execution = session.get(AgentExecution, execution_id)
+    if execution is None or execution.user_id != current.user.id:
+        raise ApiError(404, "EXECUTION_NOT_FOUND", "执行不存在")
+    if execution.status == "SUCCEEDED":
+        raise ApiError(409, "EXECUTION_ALREADY_SUCCEEDED", "该执行已成功，无需重试")
+    if execution.status not in {"FAILED", "TIMED_OUT"}:
+        raise ApiError(409, "EXECUTION_NOT_RETRYABLE", "当前状态不可重试")
+
+    if not execution.idempotency_key or not execution.draft_operation:
+        raise ApiError(422, "EXECUTION_NOT_RETRYABLE", "缺少幂等键或操作草稿，无法安全重试")
+
+    result = agent_service.retry_operation(
+        session,
+        settings=request.app.state.settings,
+        execution=execution,
+        subject=current.user.username,
+        role=industrial_role(current),
+        trace_id=getattr(request.state, "trace_id", None),
+        transport=getattr(request.app.state, "connector_transport", None),
+    )
+    return ok(result, "已按同一幂等键重试")

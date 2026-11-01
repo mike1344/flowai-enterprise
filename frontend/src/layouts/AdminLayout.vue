@@ -9,6 +9,7 @@
         <el-menu-item index="/admin">运行总览</el-menu-item>
         <el-menu-item index="/admin/applications">AI 应用</el-menu-item>
         <el-menu-item index="/admin/knowledge">知识库</el-menu-item>
+        <el-menu-item index="/admin/stats">运行统计</el-menu-item>
         <el-menu-item index="/admin/systems">平台模块</el-menu-item>
       </el-menu>
       <div class="aside-hint">P0 逐步开放：工具 / 用户 / 监控</div>
