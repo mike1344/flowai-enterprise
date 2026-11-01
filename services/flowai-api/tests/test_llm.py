@@ -279,3 +279,47 @@ def test_no_evidence_does_not_call_model(env):
     assert data["status"] == "SUCCEEDED"
     assert "未识别到设备" in data["message"]
     assert llm_calls == []  # 无依据绝不调用模型
+
+def test_draft_test_uses_real_model(env):
+    api, app = env
+    csrf = login(api)
+    slug = publish_app_with_model(api, csrf)  # 复用：建模型+应用（已发布）
+    app_id = next(
+        item["id"] for item in api.get("/api/v1/applications", headers=csrf).json()["data"]["items"]
+        if item["slug"] == slug
+    )
+
+    llm_transport, calls = transport_for({"/chat/completions": chat_response(content="草稿测试模型回答")})
+    app.state.llm_transport = llm_transport
+
+    result = api.post(
+        f"/api/v1/applications/{app_id}/test",
+        json={"message": "介绍一下你能做什么"},
+        headers=csrf,
+    ).json()["data"]
+
+    assert calls, "草稿测试应调用真实模型"
+    assert result["answer"] == "草稿测试模型回答"
+    assert "真实模型调用" in result["note"]
+
+
+def test_draft_test_falls_back_when_model_fails(env):
+    api, app = env
+    csrf = login(api)
+    slug = publish_app_with_model(api, csrf)
+    app_id = next(
+        item["id"] for item in api.get("/api/v1/applications", headers=csrf).json()["data"]["items"]
+        if item["slug"] == slug
+    )
+
+    llm_transport, _ = transport_for({"/chat/completions": "timeout"})
+    app.state.llm_transport = llm_transport
+
+    result = api.post(
+        f"/api/v1/applications/{app_id}/test",
+        json={"message": "测试"},
+        headers=csrf,
+    ).json()["data"]
+
+    assert "[draft-test]" in result["answer"]
+    assert "LLM_TIMEOUT" in result["note"]

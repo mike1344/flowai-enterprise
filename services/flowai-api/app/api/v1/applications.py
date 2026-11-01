@@ -110,12 +110,15 @@ async def update_application(
 async def test_application(
     app_id: int,
     payload: DraftTestRequest,
+    request: Request,
     current: CurrentUser = Depends(require_permission("app:manage")),
     _csrf: CurrentUser = Depends(verify_csrf),
     session: Session = Depends(get_db),
 ) -> dict:
     app = _get(session, app_id)
-    result = app_service.run_draft_test(session, app, payload.message)
+    result = app_service.run_draft_test(
+        session, app, payload.message, transport=getattr(request.app.state, "llm_transport", None)
+    )
     if app.status in {"DRAFT", "TESTING"}:
         app.status = "TESTING"
         session.commit()

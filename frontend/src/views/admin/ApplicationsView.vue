@@ -32,12 +32,30 @@
       <el-table-column label="操作">
         <template #default="{ row }">
           <el-button size="small" @click="publish(row)" :disabled="row.status === 'PUBLISHED'">发布</el-button>
+          <el-button size="small" @click="openTest(row)">草稿测试</el-button>
           <el-button size="small" @click="openTools(row)">工具授权</el-button>
           <el-button size="small" @click="openVersions(row)">版本</el-button>
           <el-button size="small" @click="$router.push(`/apps/${row.slug}`)">打开</el-button>
         </template>
       </el-table-column>
     </el-table>
+
+    <el-dialog v-model="testDialog" :title="`草稿测试 · ${currentApp?.name || ''}`" width="640px">
+      <p class="muted">对当前草稿配置发起一次真实模型调用，用于发布前验证（不影响已发布版本）。</p>
+      <el-input v-model="testPrompt" type="textarea" :rows="3" placeholder="输入测试问题，例如：介绍一下你能做什么" />
+      <div class="dialog-actions">
+        <el-button type="primary" size="small" :loading="testing" @click="runTest">运行测试</el-button>
+      </div>
+      <el-alert
+        v-if="testResult"
+        class="test-alert"
+        :type="testResult.ok ? 'success' : 'error'"
+        :title="testResult.ok ? '测试成功' : '测试失败'"
+        :description="testResult.detail"
+        :closable="false"
+        show-icon
+      />
+    </el-dialog>
 
     <el-dialog v-model="versionDialog" :title="`版本历史 · ${currentApp?.name || ''}`" width="720px">
       <el-table :data="versions" size="small" border>

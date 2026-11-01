@@ -120,25 +120,45 @@ def update_draft(session: Session, app: AIApplication, **fields) -> AIApplicatio
     return app
 
 
-def run_draft_test(session: Session, app: AIApplication, message: str) -> dict[str, Any]:
+def run_draft_test(session: Session, app: AIApplication, message: str, transport=None) -> dict[str, Any]:
     """草稿测试：校验配置并给出可验证的离线回显，不写会话、不调用写工具。"""
     problems = validate_for_publish(session, app)
     config = normalize_config(app.draft_config)
     model = session.get(ModelConfig, int(config["model_config_id"])) if config.get("model_config_id") else None
 
-    answer = (
+    echo = (
         f"[draft-test] {app.name} 收到：{message}\n"
         f"system_prompt 长度={len(str(config.get('system_prompt') or ''))}，"
         f"kb={config['kb_ids']}，tools={config['tool_ids']}，"
         f"model={model.name if model else '未配置'}"
     )
+
+    answer, model_note = echo, "离线回显（未调用模型）"
+    if model is not None and model.provider != "MOCK":
+        from app.services import llm
+
+        try:
+            # 草稿测试用于预览提示词效果：直接使用应用自己的 system_prompt，不套用生产侧的事实约束
+            result = llm.chat(
+                model,
+                [
+                    {"role": "system", "content": str(config.get("system_prompt") or "你是工业设备售后助手。")},
+                    {"role": "user", "content": message},
+                ],
+                transport=transport,
+                timeout=30.0,
+            )
+            answer = result.content
+            model_note = f"真实模型调用（{result.model}，{result.total_tokens} tokens，{result.latency_ms}ms）"
+        except llm.LlmError as exc:
+            model_note = f"模型调用失败已回退离线回显：{exc.code} {exc.message}"
     return {
         "ok": not problems,
         "problems": problems,
         "answer": answer,
         "model": model.name if model else None,
         "config": config,
-        "note": "P0 草稿测试使用离线回显；真实模型调用在 M04 起接入",
+        "note": model_note,
     }
 
 
