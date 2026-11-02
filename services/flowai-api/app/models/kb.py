@@ -130,6 +130,10 @@ class IndexVersion(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="BUILDING")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     chunk_count: Mapped[int] = mapped_column(default=0)
+    # CR-006：记录构建该索引所用的向量提供者；检索必须用同一提供者编码查询
+    embedding_provider: Mapped[str] = mapped_column(String(30), nullable=False, default="hash")
+    embedding_model: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    embedding_dim: Mapped[int] = mapped_column(default=256)
     created_at: Mapped[datetime] = mapped_column(TimestampType, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         TimestampType, nullable=False, default=utcnow, onupdate=utcnow

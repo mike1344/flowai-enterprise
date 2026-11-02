@@ -50,3 +50,6 @@ Thumbs.db
 infra/backup/out/
 pip-unpack-*/
 pip-metadata-*/
+
+fastembed_cache/
+.local_models/

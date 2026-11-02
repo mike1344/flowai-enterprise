@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import Settings, get_settings
 from app.core.errors import ApiError
 from app.models import (
     ApplicationKnowledgeBase,
@@ -21,11 +22,13 @@ from app.models import (
     KnowledgeBase,
     ResourceGrant,
 )
+from app.services import embeddings
 
 CHUNK_SIZE = 800
 CHUNK_OVERLAP = 120
 EMBED_DIM = 256
-REFUSAL_THRESHOLD = 0.18
+REFUSAL_THRESHOLD = 0.18  # hash 提供者的默认阈值（CR-006 起按提供者区分）
+PROVIDER_THRESHOLDS = {"hash": 0.18, "local": 0.45, "openai": 0.35}
 UPLOAD_ROOT = Path(__file__).resolve().parents[2] / "data" / "uploads"
 
 ALLOWED_TYPES = {
@@ -87,26 +90,21 @@ def split_chunks(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP
 
 
 def tokenize(text: str) -> list[str]:
-    """ASCII 词 + CJK 单字/双字：无需分词依赖，中英文都可匹配。"""
-    lowered = text.lower()
-    tokens = re.findall(r"[a-z0-9]+", lowered)
-    for run in re.findall(r"[\u4e00-\u9fff]+", lowered):
-        tokens.extend(list(run))
-        tokens.extend(run[index : index + 2] for index in range(len(run) - 1))
-    return tokens
+    """兼容入口：hash 提供者的分词实现（CR-006 起统一在 embeddings 模块）。"""
+    return embeddings.tokenize(text)
 
 
-def embed(text: str) -> list[float]:
-    """离线确定性哈希向量（P0 无外部 Embedding 依赖）；接口与外部模型一致。"""
-    vector = [0.0] * EMBED_DIM
-    tokens = tokenize(text)
-    for token in tokens:
-        digest = hashlib.sha256(token.encode("utf-8")).digest()
-        index = int.from_bytes(digest[:4], "big") % EMBED_DIM
-        sign = 1.0 if digest[4] % 2 == 0 else -1.0
-        vector[index] += sign
-    norm = math.sqrt(sum(value * value for value in vector)) or 1.0
-    return [round(value / norm, 6) for value in vector]
+def embed(text: str, settings: Settings | None = None) -> list[float]:
+    """兼容入口：按配置的提供者生成向量（默认 hash，保持离线可跑）。"""
+    return embeddings.embed(text, settings)
+
+
+def refusal_threshold(settings: Settings | None = None) -> float:
+    """阈值随向量空间变化：bge 的无关问题相似度约 0.28～0.30，hash 只有 0.1 左右。"""
+    settings = settings or get_settings()
+    if settings.rag_refusal_threshold and settings.rag_refusal_threshold > 0:
+        return float(settings.rag_refusal_threshold)
+    return PROVIDER_THRESHOLDS.get(embeddings.provider(settings), REFUSAL_THRESHOLD)
 
 
 def cosine(a: list[float], b: list[float]) -> float:
@@ -122,7 +120,10 @@ def current_active_index(session: Session, kb_id: int) -> IndexVersion | None:
     ).scalar_one_or_none()
 
 
-def _new_index_version(session: Session, kb_id: int) -> IndexVersion:
+def _new_index_version(
+    session: Session, kb_id: int, settings: Settings | None = None
+) -> IndexVersion:
+    settings = settings or get_settings()
     next_no = (
         session.execute(
             select(func.max(IndexVersion.version_no)).where(IndexVersion.knowledge_base_id == kb_id)
@@ -130,17 +131,29 @@ def _new_index_version(session: Session, kb_id: int) -> IndexVersion:
         or 0
     ) + 1
     version = IndexVersion(
-        knowledge_base_id=kb_id, version_no=next_no, status="BUILDING", is_active=False
+        knowledge_base_id=kb_id,
+        version_no=next_no,
+        status="BUILDING",
+        is_active=False,
+        embedding_provider=embeddings.provider(settings),
+        embedding_model=embeddings.model_name(settings),
+        embedding_dim=embeddings.dimension(settings),
     )
     session.add(version)
     session.flush()
     return version
 
 
-def ingest_document(session: Session, document: Document, raw_path: Path) -> Document:
+def ingest_document(
+    session: Session,
+    document: Document,
+    raw_path: Path,
+    settings: Settings | None = None,
+) -> Document:
     """解析 → 分块 → 向量 → 文档 READY → 索引就绪切换。失败写入 FAILED 且不动旧索引。"""
+    settings = settings or get_settings()
     kind = detect_kind(document.content_type, document.filename or document.title)
-    index_version = _new_index_version(session, document.knowledge_base_id)
+    index_version = _new_index_version(session, document.knowledge_base_id, settings)
     index_version_id = index_version.id
     try:
         document.status = "PROCESSING"
@@ -156,8 +169,9 @@ def ingest_document(session: Session, document: Document, raw_path: Path) -> Doc
         session.execute(
             DocumentChunk.__table__.delete().where(DocumentChunk.document_id == document.id)
         )
+        vectors = embeddings.embed_many(chunks, settings)
         for index, content in enumerate(chunks):
-            vector = embed(content)
+            vector = vectors[index]
             session.add(
                 DocumentChunk(
                     document_id=document.id,
@@ -256,7 +270,9 @@ def retrieve(
     user_id: int,
     query: str,
     limit: int = 5,
+    settings: Settings | None = None,
 ) -> dict[str, Any]:
+    settings = settings or get_settings()
     app_kbs = app_kb_scope(session, application_id)
     grants = user_kb_scope(session, user_id)
     effective = sorted(app_kbs & grants)
@@ -270,7 +286,18 @@ def retrieve(
     if index is not None and index.status != "READY":
         return {"items": [], "citations": [], "refused": True, "reason": "INDEX_NOT_READY"}
 
-    query_vector = embed(query)
+    # 查询向量必须与索引同源：换过 provider 的旧索引不能拿新维度的向量去比
+    embed_settings = settings
+    if index is not None and index.embedding_provider:
+        embed_settings = settings.model_copy(
+            update={
+                "embedding_provider": index.embedding_provider,
+                "embedding_model": index.embedding_model or settings.embedding_model,
+                "embedding_dim": index.embedding_dim or settings.embedding_dim,
+            }
+        )
+    query_vector = embeddings.embed(query, embed_settings)
+
     candidates = session.execute(
         select(DocumentChunk, Document)
         .join(Document, Document.id == DocumentChunk.document_id)
@@ -283,10 +310,12 @@ def retrieve(
 
     scored: list[tuple[float, DocumentChunk, Document]] = []
     for chunk, document in candidates:
-        vector = json.loads(chunk.embedding) if chunk.embedding else embed(chunk.content)
+        vector = json.loads(chunk.embedding) if chunk.embedding else embeddings.embed(chunk.content, embed_settings)
+        if len(vector) != len(query_vector):  # 维度不一致=旧索引残留，跳过而不是算出错误分数
+            continue
         scored.append((cosine(query_vector, vector), chunk, document))
     scored.sort(key=lambda item: item[0], reverse=True)
-    top = [item for item in scored[:limit] if item[0] >= REFUSAL_THRESHOLD]
+    top = [item for item in scored[:limit] if item[0] >= refusal_threshold(embed_settings)]
 
     if not top:
         return {"items": [], "citations": [], "refused": True, "reason": "NO_EVIDENCE"}
@@ -323,9 +352,9 @@ def retrieve(
     }
 
 
-def answer_with_evidence(session: Session, **kwargs) -> dict[str, Any]:
+def answer_with_evidence(session: Session, settings: Settings | None = None, **kwargs) -> dict[str, Any]:
     """无证据必须拒答；有证据返回带引用的答案（P0 抽取式）。"""
-    result = retrieve(session, **kwargs)
+    result = retrieve(session, settings=settings, **kwargs)
     if result["refused"]:
         reasons = {
             "APP_HAS_NO_KB": "该应用尚未绑定知识库。",

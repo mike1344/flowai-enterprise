@@ -187,6 +187,7 @@ def start_execution(
             application_id=app.id,
             user_id=conversation.user_id,
             query=user_message,
+            settings=settings,
         )
         record_tool(
             session, execution,

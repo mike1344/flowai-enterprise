@@ -12,6 +12,14 @@
 - **CR-008 已完成（2026-11-02）**：`sessions.py` 的 `send_message`/`confirm_execution`/`confirm_duplicate`/`retry_execution` 与 `applications.py` 的 `test_application` 改为同步处理器，由 FastAPI 线程池承载，事件循环不再被 LLM/工业调用占住。同基线复测：模型路径 RPS 0.80→**2.19**（×2.7）、P95 5.0s→**2.35s**；写路径 RPS 0.54→**1.62**、P95 6059ms→**125ms**（×48），写路径 SLO 全部达标。回归 132 passed、P0 19/19、Agent 20/20。
   证据：`docs/audit/29-CR-008-阻塞IO修复-验收证据.md`、`docs/acceptance/V1.3-性能基线-20261102.md`
 
+### T3 可插拔 Embedding（CR-006，2026-11-02）
+
+- 新增 `app/services/embeddings.py`：hash（离线兜底）/ local（fastembed + bge-small-zh-v1.5，512 维）/ OpenAI 兼容三种提供者；`index_version` 记录 provider/model/dim（迁移 `0011_embedding`），检索按生效索引的提供者编码查询。
+- 拒答阈值按向量空间冻结：hash 0.18、local 0.45（bge 负例最高 0.294、正例最低 0.564），可用 `FLOWAI_RAG_REFUSAL_THRESHOLD` 覆盖。
+- 实测：同一组语义改写问题命中 **4/10 → 10/10**；含 4 条负例整体 **8/14 → 14/14**。
+- 配套 `scripts/reembed_kb.py`（换 provider 后重建向量并切版本，失败保留旧索引）与 `scripts/eval_embedding.py`（可重复对比）。
+- 回归：flowai **141 passed**。证据：`docs/audit/31-T3-Embedding-验收证据.md`、`docs/acceptance/V1.3-Embedding对比-20261102.md`
+
 ### T2 异步文档摄取（CR-005，2026-11-02）
 
 - Celery + Redis：新增 `worker` 服务，上传接口 98ms 返回 202/PENDING，worker 后台完成解析→分块→向量→索引版本切换，实测 1.1s 后 READY。

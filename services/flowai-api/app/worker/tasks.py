@@ -37,7 +37,7 @@ def run_ingest(document_id: int, path: str, session: Session) -> str:
     document = session.get(Document, document_id)
     if document is None or document.deleted_at is not None:
         return "MISSING"
-    result = rag_service.ingest_document(session, document, Path(path))
+    result = rag_service.ingest_document(session, document, Path(path), settings=get_settings())
     return result.status
 
 

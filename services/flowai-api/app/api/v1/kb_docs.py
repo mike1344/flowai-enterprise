@@ -48,7 +48,7 @@ async def upload_document(
 
     settings = request.app.state.settings
     if settings.task_always_eager:
-        result = rag_service.ingest_document(session, document, path)
+        result = rag_service.ingest_document(session, document, path, settings=settings)
         return ok(
             {
                 "id": result.id,
@@ -91,7 +91,7 @@ async def reprocess_document(
 
     settings = request.app.state.settings
     if settings.task_always_eager:
-        result = rag_service.ingest_document(session, document, Path(match[-1]))
+        result = rag_service.ingest_document(session, document, Path(match[-1]), settings=settings)
         return ok(
             {"id": result.id, "status": result.status, "error_message": result.error_message, "queued": False},
             "重处理完成" if result.status == "READY" else "重处理失败",

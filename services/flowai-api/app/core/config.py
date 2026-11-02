@@ -57,9 +57,13 @@ class Settings(BaseSettings):
     llm_base_url: str = ""
     llm_api_key: str | None = None
     llm_model: str = ""
-    embedding_provider: str = "openai-compatible"
+    embedding_provider: str = "hash"
     embedding_model: str = ""
     embedding_api_key: str | None = None
+    embedding_base_url: str = ""
+    embedding_dim: int = 1536
+    # 拒答阈值：0 表示按向量提供者取默认（hash 0.18 / local 0.45 / openai 0.35）
+    rag_refusal_threshold: float = 0.0
 
     @property
     def cors_origin_list(self) -> list[str]:
