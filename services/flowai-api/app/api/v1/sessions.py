@@ -126,7 +126,7 @@ async def list_messages(
 
 
 @router.post("/sessions/{conversation_id}/messages")
-async def send_message(
+def send_message(
     conversation_id: int,
     payload: MessageCreate,
     request: Request,
@@ -176,7 +176,7 @@ async def get_execution(
 
 
 @router.post("/executions/{execution_id}/confirm")
-async def confirm_execution(
+def confirm_execution(
     execution_id: int,
     payload: ConfirmRequest,
     request: Request,
@@ -200,7 +200,7 @@ async def confirm_execution(
 
 
 @router.post("/executions/{execution_id}/confirm-duplicate")
-async def confirm_duplicate(
+def confirm_duplicate(
     execution_id: int,
     payload: DuplicateConfirmRequest,
     request: Request,
@@ -275,7 +275,7 @@ async def execution_steps(
 
 
 @router.post("/executions/{execution_id}/retry")
-async def retry_execution(
+def retry_execution(
     execution_id: int,
     request: Request,
     current: CurrentUser = Depends(verify_csrf),

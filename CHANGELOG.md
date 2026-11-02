@@ -9,6 +9,8 @@
 - **T1 性能基线（CR-004）**：新增 `scripts/perf_baseline.py`，覆盖模型路径与写路径，三档并发（1/2/4）冻结门槛。实测：模型路径 P95 1.5s / 2.6s / 5.0s（达标）；写路径 P95 78ms / 2057ms / 6058ms（并发 ≥2 未达标）。RPS 不随并发增长 → **请求被串行化**。
   证据：`docs/audit/28-T1-性能基线-验收证据.md`、`docs/acceptance/V1.3-性能基线-20261101.md`
 - **CR-008（新登记，P1）**：`async def` 处理器内使用同步 `httpx.Client` 与同步 SQLAlchemy Session 阻塞事件循环，需异步化后再复测同一基线。
+- **CR-008 已完成（2026-11-02）**：`sessions.py` 的 `send_message`/`confirm_execution`/`confirm_duplicate`/`retry_execution` 与 `applications.py` 的 `test_application` 改为同步处理器，由 FastAPI 线程池承载，事件循环不再被 LLM/工业调用占住。同基线复测：模型路径 RPS 0.80→**2.19**（×2.7）、P95 5.0s→**2.35s**；写路径 RPS 0.54→**1.62**、P95 6059ms→**125ms**（×48），写路径 SLO 全部达标。回归 132 passed、P0 19/19、Agent 20/20。
+  证据：`docs/audit/29-CR-008-阻塞IO修复-验收证据.md`、`docs/acceptance/V1.3-性能基线-20261102.md`
 
 ## v1.2.0 — 2026-11-01（P0 + P1 全量交付）
 

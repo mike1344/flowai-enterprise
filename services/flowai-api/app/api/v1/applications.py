@@ -107,7 +107,7 @@ async def update_application(
 
 
 @router.post("/applications/{app_id}/test")
-async def test_application(
+def test_application(
     app_id: int,
     payload: DraftTestRequest,
     request: Request,
