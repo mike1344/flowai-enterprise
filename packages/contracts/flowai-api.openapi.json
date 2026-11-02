@@ -1865,7 +1865,7 @@
           "knowledge"
         ],
         "summary": "Upload Document",
-        "description": "上传即同步摄取（P0 单机）；状态 PENDING→PROCESSING→READY/FAILED 全部落库可查。",
+        "description": "上传后立即返回；解析/向量交后台任务（eager 模式则同步完成，供本地与测试）。",
         "operationId": "upload_document_api_v1_knowledge_bases__kb_id__documents_upload_post",
         "parameters": [
           {
