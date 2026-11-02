@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     redis_url: str | None = None
     chroma_url: str | None = None
 
+    # CR-005：异步文档摄取（Celery + Redis）
+    # 本地/测试默认同步执行（eager）；容器部署由 compose 置 false，交 worker 进程处理。
+    task_always_eager: bool = True
+    task_broker_url: str | None = None
+    task_worker_concurrency: int = 2
+
     # ADR-008：跨服务身份（签发侧）
     service_jwt_secret: str | None = None
     service_jwt_kid: str = "k1"

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Request, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,7 @@ from app.core.errors import ApiError, ok
 from app.models import Document, DocumentChunk
 from app.services import kb as kb_service
 from app.services import rag as rag_service
+from app.worker.tasks import ingest_document_task
 
 router = APIRouter()
 
@@ -20,12 +21,13 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 @router.post("/knowledge-bases/{kb_id}/documents/upload", status_code=202)
 async def upload_document(
     kb_id: int,
+    request: Request,
     file: UploadFile = File(...),
     current: CurrentUser = Depends(require_permission("kb:manage")),
     _csrf: CurrentUser = Depends(verify_csrf),
     session: Session = Depends(get_db),
 ) -> dict:
-    """上传即同步摄取（P0 单机）；状态 PENDING→PROCESSING→READY/FAILED 全部落库可查。"""
+    """上传后立即返回；解析/向量交后台任务（eager 模式则同步完成，供本地与测试）。"""
     kb_service.get_kb(session, kb_id)
     payload = await file.read()
     if not payload:
@@ -43,21 +45,37 @@ async def upload_document(
         content_type=file.content_type or "text/plain",
         size_bytes=len(payload),
     )
-    result = rag_service.ingest_document(session, document, path)
+
+    settings = request.app.state.settings
+    if settings.task_always_eager:
+        result = rag_service.ingest_document(session, document, path)
+        return ok(
+            {
+                "id": result.id,
+                "kind": kind,
+                "status": result.status,
+                "error_message": result.error_message,
+                "queued": False,
+            },
+            "文档摄取完成" if result.status == "READY" else "文档摄取失败",
+        )
+
+    ingest_document_task.delay(document.id, str(path))
     return ok(
         {
-            "id": result.id,
+            "id": document.id,
             "kind": kind,
-            "status": result.status,
-            "error_message": result.error_message,
+            "status": document.status,
+            "queued": True,
         },
-        "文档摄取完成" if result.status == "READY" else "文档摄取失败",
+        "文档已入队，后台处理中",
     )
 
 
 @router.post("/documents/{document_id}/reprocess")
 async def reprocess_document(
     document_id: int,
+    request: Request,
     current: CurrentUser = Depends(require_permission("kb:manage")),
     _csrf: CurrentUser = Depends(verify_csrf),
     session: Session = Depends(get_db),
@@ -71,11 +89,19 @@ async def reprocess_document(
     if not match:
         raise ApiError(422, "SOURCE_FILE_MISSING", "原始文件缺失，无法重处理")
 
-    result = rag_service.ingest_document(session, document, Path(match[-1]))
-    return ok(
-        {"id": result.id, "status": result.status, "error_message": result.error_message},
-        "重处理完成" if result.status == "READY" else "重处理失败",
-    )
+    settings = request.app.state.settings
+    if settings.task_always_eager:
+        result = rag_service.ingest_document(session, document, Path(match[-1]))
+        return ok(
+            {"id": result.id, "status": result.status, "error_message": result.error_message, "queued": False},
+            "重处理完成" if result.status == "READY" else "重处理失败",
+        )
+
+    document.status = "PENDING"
+    document.error_message = None
+    session.commit()
+    ingest_document_task.delay(document.id, str(match[-1]))
+    return ok({"id": document.id, "status": document.status, "queued": True}, "重处理已入队")
 
 
 @router.get("/documents/{document_id}")

@@ -12,6 +12,13 @@
 - **CR-008 已完成（2026-11-02）**：`sessions.py` 的 `send_message`/`confirm_execution`/`confirm_duplicate`/`retry_execution` 与 `applications.py` 的 `test_application` 改为同步处理器，由 FastAPI 线程池承载，事件循环不再被 LLM/工业调用占住。同基线复测：模型路径 RPS 0.80→**2.19**（×2.7）、P95 5.0s→**2.35s**；写路径 RPS 0.54→**1.62**、P95 6059ms→**125ms**（×48），写路径 SLO 全部达标。回归 132 passed、P0 19/19、Agent 20/20。
   证据：`docs/audit/29-CR-008-阻塞IO修复-验收证据.md`、`docs/acceptance/V1.3-性能基线-20261102.md`
 
+### T2 异步文档摄取（CR-005，2026-11-02）
+
+- Celery + Redis：新增 `worker` 服务，上传接口 98ms 返回 202/PENDING，worker 后台完成解析→分块→向量→索引版本切换，实测 1.1s 后 READY。
+- 范围修正：检索走 MySQL 向量列，Chroma 容器实际未被使用，「按版本隔离向量集合」不适用（不做虚假交付）。
+- 顺带修复：索引 `chunk_count` 首摄取恒为 0（会话 autoflush=False 未 flush）；nginx 反代改动态 DNS 解析，容器重建后不再 502。
+- 回归：flowai 135 passed、P0 19/19、Agent 20/20。证据：`docs/audit/30-T2-异步摄取-验收证据.md`
+
 ## v1.2.0 — 2026-11-01（P0 + P1 全量交付）
 
 ### 新增能力

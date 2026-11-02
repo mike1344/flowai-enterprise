@@ -183,6 +183,8 @@ def ingest_document(session: Session, document: Document, raw_path: Path) -> Doc
         document.status = "READY"
         document.error_message = None
         index_version.status = "READY"
+        # 会话是 autoflush=False：统计前必须显式 flush，否则首次摄取会把 chunk_count 记成 0
+        session.flush()
         index_version.chunk_count = session.execute(
             select(func.count())
             .select_from(DocumentChunk)

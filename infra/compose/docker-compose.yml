@@ -111,6 +111,9 @@ services:
       FLOWAI_LLM_API_KEY: ${FLOWAI_LLM_API_KEY:-}
       FLOWAI_LLM_BASE_URL: ${FLOWAI_LLM_BASE_URL:-}
       FLOWAI_LLM_MODEL: ${FLOWAI_LLM_MODEL:-}
+      FLOWAI_TASK_ALWAYS_EAGER: "false"
+    volumes:
+      - uploads_data:/app/data
     healthcheck:
       test:
         - CMD
@@ -121,6 +124,36 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    networks: [internal]
+
+  # CR-005：文档摄取后台 worker（与 API 共用镜像与上传目录）
+  worker:
+    build:
+      context: ../../services/flowai-api
+    restart: unless-stopped
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=INFO", "--concurrency=2"]
+    depends_on:
+      flowai-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      FLOWAI_ENVIRONMENT: production
+      FLOWAI_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      FLOWAI_DATABASE_URL: mysql+pymysql://${FLOWAI_DB_USER:-flowai_app}:${FLOWAI_DB_PASSWORD}@mysql:3306/${FLOWAI_DB_NAME:-flowai_db}?charset=utf8mb4
+      FLOWAI_REDIS_URL: redis://redis:6379/0
+      FLOWAI_TASK_ALWAYS_EAGER: "false"
+      FLOWAI_TASK_WORKER_CONCURRENCY: "2"
+    volumes:
+      - uploads_data:/app/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "celery -A app.worker.celery_app inspect ping -t 5 > /dev/null 2>&1 || exit 1"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     networks: [internal]
 
   industrial-api:
@@ -180,3 +213,4 @@ volumes:
   mysql_data:
   redis_data:
   chroma_data:
+  uploads_data:
