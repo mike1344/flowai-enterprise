@@ -12,6 +12,13 @@
 - **CR-008 已完成（2026-11-02）**：`sessions.py` 的 `send_message`/`confirm_execution`/`confirm_duplicate`/`retry_execution` 与 `applications.py` 的 `test_application` 改为同步处理器，由 FastAPI 线程池承载，事件循环不再被 LLM/工业调用占住。同基线复测：模型路径 RPS 0.80→**2.19**（×2.7）、P95 5.0s→**2.35s**；写路径 RPS 0.54→**1.62**、P95 6059ms→**125ms**（×48），写路径 SLO 全部达标。回归 132 passed、P0 19/19、Agent 20/20。
   证据：`docs/audit/29-CR-008-阻塞IO修复-验收证据.md`、`docs/acceptance/V1.3-性能基线-20261102.md`
 
+### T4 限流共享化与 binlog/PITR（CR-007，2026-11-02，部分完成）
+
+- 登录限流支持 Redis 共享计数（ZSET 滑动窗口），Redis 不可用自动回退进程内；容器内验证 `backend=redis`；新增 5 个用例。
+- MySQL 开启 binlog（ROW + sync-binlog，保留 7 天），备份清单记录 `binlog_position`。
+- 新增 `infra/backup/pitr-drill.ps1`：全量 dump（带位点）→ 备份后写入 → drop 库 → 恢复 → 重放 binlog。实测全量恢复 **0.22s**；**binlog 重放 SKIPPED**（官方 mysql:8.4 镜像不含 mysqlbinlog）。
+- 回归：flowai **146 passed**。证据：`docs/audit/32-T4-限流与PITR-验收证据.md`
+
 ### T3 可插拔 Embedding（CR-006，2026-11-02）
 
 - 新增 `app/services/embeddings.py`：hash（离线兜底）/ local（fastembed + bge-small-zh-v1.5，512 维）/ OpenAI 兼容三种提供者；`index_version` 记录 provider/model/dim（迁移 `0011_embedding`），检索按生效索引的提供者编码查询。

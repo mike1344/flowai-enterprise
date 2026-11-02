@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1.router import api_router
+from app.core import ratelimit
 from app.core.config import Settings, get_settings
 from app.core.errors import register_error_handlers
 from app.core.logging import AccessLogMiddleware, configure_logging
@@ -27,6 +28,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         description="平台 API：RBAC、AI 应用、知识库、Agent、Trace（P0 逐步实现）",
     )
     app.state.settings = settings
+    app.state.rate_limit_backend = ratelimit.configure(settings)
 
     if settings.database_url:
         engine = build_engine(settings.database_url)

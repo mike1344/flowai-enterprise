@@ -8,6 +8,12 @@ services:
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
+      # CR-007：开启 binlog，PITR 需要「全量备份 + binlog 重放」
+      - --log-bin=mysql-bin
+      - --server-id=1
+      - --binlog-format=ROW
+      - --binlog_expire_logs_seconds=604800
+      - --sync-binlog=1
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       FLOWAI_DB_NAME: ${FLOWAI_DB_NAME:-flowai_db}
