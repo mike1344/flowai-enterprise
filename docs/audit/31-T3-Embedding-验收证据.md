@@ -62,9 +62,19 @@ python scripts\eval_embedding.py --out-dir docs\acceptance
 docker compose run --rm -v F:/Y1:/repo -w /repo flowai-api python scripts/reembed_kb.py --all
 ```
 
-## 7. 已知限制
+## 7. 容器内尝试与已知限制
 
-- bge-small-zh 首次使用需下载 ~95MB（已挂 `hf_cache` 卷缓存）；完全离线交付需把模型烘进镜像。
-- 容器镜像因 `fastembed + onnxruntime` 增大约 200MB；本次网络极慢（pip 下载约 30 分钟），本机镜像重建仍在后台进行，**容器内 local 路径未做端到端实跑**，验证在宿主 venv 完成（同一套代码与依赖）。
-- 50 题固定评测集（ACC-03）仍是 hash 语料上的断言；切到 local 后需按新阈值重跑一遍再更新基线，留待 T3.1。
+**镜像**：`flowai-flowai-api` / `flowai-worker` 已重建完成，含 `fastembed + onnxruntime`，镜像由 329MB 增至 **639MB**。
+
+**容器内实测遇到的问题（如实记录）**：
+
+1. `flowai-migrate` 镜像是旧构建（不含 0011 迁移），启动即 `exit 255`，导致 `docker compose run` 的依赖条件失败。改用 API 镜像执行迁移成功：
+   `docker compose run --rm flowai-api alembic upgrade head` → `Running upgrade 0010_llm_usage -> 0011_embedding`。**线上库现已处于 0011**。
+2. 容器内首次使用 bge 需下载模型，本机网络极慢（10 分钟未完成），因此**本轮未在容器内跑通 local 检索**；已把 `.env` 回退为 `hash`，线上仍按 hash 索引提供检索（查询/写入均正常，登录与检索冒烟通过）。宿主侧（同代码、同依赖、同模型）已完成全量验证。
+
+**限制**：
+
+- bge-small-zh 首次使用需下载 ~95MB；已挂 `hf_cache` 卷做容器间共享缓存，但**完全离线交付需要把模型烘进镜像或预置缓存卷**——这是切换到 local 的前置条件。
+- 镜像体积 +310MB（onnxruntime 占主要部分），客户侧需确认磁盘/分发预算。
+- 50 题固定评测集（ACC-03）仍是 hash 语料上的断言；切到 local 后需按新阈值重跑并更新基线（T3.1）。
 - 未做 embedding 批量吞吐与并发压测。
