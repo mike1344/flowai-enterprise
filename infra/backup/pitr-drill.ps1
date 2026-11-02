@@ -9,7 +9,9 @@
 
 param(
     [string]$Password = "DrillOnly!2026",
-    [string]$Image = "mysql:8.4"
+    [string]$Image = "mysql:8.4",
+    # 可选：提供 mysqlbinlog 的工具镜像（服务端仍用 -Image）`n    # 例：percona/percona-server:8.4（自带 mysqlbinlog）；注意它不能当服务端用本脚本的 -Image
+    [string]$BinlogImage = ""
 )
 
 $ErrorActionPreference = "Continue"
@@ -84,11 +86,12 @@ try {
 
     Write-Host "== binlog replay (PITR) =="
     $hasBinlogTool = (docker exec $name sh -c "command -v mysqlbinlog" 2>$null)
+    $externalTool = [bool]$BinlogImage
     $replayStatus = "SKIPPED"
     $replayDetail = "mysqlbinlog not shipped in image $Image"
     $row2Amount = 0
 
-    if ($hasBinlogTool) {
+    if ($hasBinlogTool -or $externalTool) {
         $binlogFile = Join-Path $work "incr.binlog"
         $files = (docker exec $name sh -c "ls /var/lib/mysql/mysql-bin.0* | sort" 2>$null) -split "`n" |
             Where-Object { $_.Trim() }
@@ -100,9 +103,19 @@ try {
             if ($started) { $targets += ("/var/lib/mysql/" + $leaf) }
         }
         if ($targets.Count -gt 0) {
-            $quoted = ($targets | ForEach-Object { "'" + $_ + "'" }) -join " "
-            docker exec $name sh -c "mysqlbinlog --start-position=$logPos $quoted > /tmp/incr.binlog" | Out-Null
-            docker cp "${name}:/tmp/incr.binlog" $binlogFile | Out-Null
+            if ($hasBinlogTool) {
+                $quoted = ($targets | ForEach-Object { "'" + $_ + "'" }) -join " "
+                docker exec $name sh -c "mysqlbinlog --start-position=$logPos $quoted > /tmp/incr.binlog" | Out-Null
+                docker cp "${name}:/tmp/incr.binlog" $binlogFile | Out-Null
+            }
+            else {
+                # 服务端镜像没有工具：把 binlog 拷出来，交给 -BinlogImage 解析
+                $binDir = Join-Path $work "binlogs"
+                New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+                foreach ($t in $targets) { docker cp "${name}:$t" $binDir 2>$null | Out-Null }
+                $mapped = (Get-ChildItem $binDir | Sort-Object Name | ForEach-Object { "/w/binlogs/" + $_.Name }) -join " "
+                docker run --rm -v "${work}:/w" $BinlogImage sh -c "mysqlbinlog --start-position=$logPos $mapped > /w/incr.binlog" | Out-Null
+            }
             $sw2 = [System.Diagnostics.Stopwatch]::StartNew()
             $replayExit = Run-File -Path $binlogFile
             $sw2.Stop()
