@@ -50,7 +50,7 @@ drill:  backup_position=mysql-bin.000003:694, full_dump=2.3KB,
 
 尝试过的替代方案：在 `debian:bookworm-slim` 里 `apt-get install mariadb-client` 取 `mariadb-binlog`，但本机 apt 下载超时（15 分钟未完成），已放弃并把结论写进限制。
 
-**补救路径（任一即可）**：
+**已落地的脚手架**：`infra/backup/mysqlbinlog.Dockerfile`（Debian + default-mysql-client + `mariadb-binlog` 软链）。构建后可用 `pitr-drill.ps1 -Image flowai-ops-mysqlbinlog` 复跑；**该镜像未在本机验证**（apt 拉包在本机持续超时），首次使用必须先确认 `mariadb-binlog` 能解析 MySQL 8.4 的 binlog。`n`n**补救路径（任一即可）**：
 1. 运维机安装 MySQL 客户端（含 `mysqlbinlog`），把 `docker cp` 出来的 binlog 在宿主机重放；
 2. 自建 ops 镜像：`FROM mysql:8.4` + 安装 `mysql-community-client`，专用于 PITR；
 3. 改用带 `mysqlbinlog` 的 Percona/MariaDB 工具链（需验证与 8.4 binlog 兼容）。
