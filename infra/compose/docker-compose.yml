@@ -66,8 +66,9 @@ services:
     networks: [internal]
 
   flowai-migrate:
-    build:
-      context: ../../services/flowai-api
+    # 复用 API 镜像（含最新 migrations），避免迁移镜像滞后于代码导致
+    # "Can't locate revision" 而每次 up 都失败
+    image: flowai-flowai-api
     command: ["alembic", "upgrade", "head"]
     restart: "no"
     depends_on:
